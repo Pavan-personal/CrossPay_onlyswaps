@@ -80,3 +80,265 @@ body {
   color: #0c5460;
   border: 1px solid #bee5eb;
 }
+
+/* Balance Display Styles */
+.balance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.balance-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 2px solid #e9ecef;
+}
+
+.balance-card.base {
+  border-color: #007bff;
+}
+
+.balance-card.avax {
+  border-color: #e84142;
+}
+
+.balance-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.balance-card.base h3 {
+  color: #007bff;
+}
+
+.balance-card.avax h3 {
+  color: #e84142;
+}
+
+.balance-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.balance-item:last-child {
+  border-bottom: none;
+}
+
+.balance-item .token {
+  font-weight: 500;
+  color: #6c757d;
+}
+
+.balance-item .amount {
+  font-weight: 600;
+  color: #28a745;
+  font-family: 'Courier New', monospace;
+}
+
+/* Faucet Styles */
+.faucet-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.faucet-section h4 {
+  margin: 0 0 12px 0;
+  color: #495057;
+}
+
+.faucet-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.faucet-buttons > div {
+  text-align: center;
+}
+
+.faucet-buttons p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.faucet-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.faucet-button:hover {
+  background: #218838;
+}
+
+.faucet-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.faucet-info {
+  font-size: 12px;
+  color: #6c757d;
+  text-align: center;
+  margin: 8px 0 0 0;
+}
+
+/* Payment Link Styles */
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 16px;
+}
+
+.mode-button {
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #e9ecef;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.mode-button:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.mode-button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.payment-link-generator {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.payment-link-generator h4 {
+  margin: 0 0 12px 0;
+  color: #495057;
+}
+
+.generate-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.generate-button:hover {
+  background: #218838;
+}
+
+.payment-link-result {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e9ecef;
+}
+
+.link-section, .qr-section {
+  margin-bottom: 16px;
+}
+
+.link-section h5, .qr-section h5 {
+  margin: 0 0 8px 0;
+  color: #495057;
+  font-size: 14px;
+}
+
+.link-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.link-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+}
+
+.copy-button, .download-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.copy-button:hover, .download-button:hover {
+  background: #5a6268;
+}
+
+.qr-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-image {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  max-width: 200px;
+}
+
+.payment-info {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.payment-info p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #495057;
+}
+
+.payment-mode-info {
+  background: #e7f3ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.payment-mode-info p {
+  margin: 8px 0;
+  color: #0c5460;
+  font-size: 14px;
+}
