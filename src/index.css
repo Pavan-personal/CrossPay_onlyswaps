@@ -342,3 +342,121 @@ body {
   color: #0c5460;
   font-size: 14px;
 }
+
+/* Payment Link Handler Styles */
+.payment-link-handler {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.payment-link-handler h3 {
+  margin: 0 0 15px 0;
+  color: #155724;
+}
+
+.payment-details {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #c3e6cb;
+}
+
+.payment-details p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #495057;
+}
+
+.payment-details strong {
+  color: #155724;
+}
+
+/* Payment Error Styles */
+.payment-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.payment-error h3 {
+  margin: 0 0 15px 0;
+  color: #721c24;
+}
+
+.payment-error p {
+  margin: 8px 0;
+  color: #721c24;
+}
+
+/* Payment Validation Styles */
+.payment-validation {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.payment-validation p {
+  margin: 0;
+  color: #856404;
+  font-weight: 500;
+}
+
+/* Mode Toggle Styles */
+.mode-toggle {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  justify-content: center;
+}
+
+.mode-toggle button {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.mode-toggle button.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.mode-toggle button:hover:not(.active) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+/* Payment Link Section Styles */
+.payment-link-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  margin: 20px 0;
+}
+
+.payment-link-section h2 {
+  margin: 0 0 20px 0;
+  color: #495057;
+  text-align: center;
+}
+
+.payment-id {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 10px;
+  word-break: break-all;
+}
