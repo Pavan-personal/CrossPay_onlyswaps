@@ -23,7 +23,9 @@ async function testConnection() {
 testConnection();
 
 // Middleware
-app.use(cors());
+app.use(cors(
+  { origin: '*' }
+));
 app.use(express.json());
 
 // Validation schemas
@@ -65,7 +67,7 @@ app.post('/api/payment/create', async (req, res) => {
 
     const paymentId = uuidv4();
     const expiresAt = new Date(Date.now() + (value.expiresInHours * 60 * 60 * 1000));
-    
+
     const payment = await prisma.paymentLink.create({
       data: {
         paymentId,
@@ -79,7 +81,7 @@ app.post('/api/payment/create', async (req, res) => {
         metadata: {}
       }
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -115,31 +117,31 @@ app.post('/api/payment/validate', async (req, res) => {
     const payment = await prisma.paymentLink.findUnique({
       where: { paymentId: value.paymentId }
     });
-    
+
     if (!payment) {
       return res.status(404).json({
         success: false,
         error: 'Payment link not found'
       });
     }
-    
+
     if (payment.status !== 'pending') {
       return res.status(400).json({
         success: false,
         error: 'Payment link is no longer active'
       });
     }
-    
+
     if (new Date() > new Date(payment.expiresAt)) {
       return res.status(400).json({
         success: false,
         error: 'Payment link has expired'
       });
     }
-    
+
     // SECURITY: Validate that the requesting address matches the intended recipient
     console.log(`Payment validation: stored recipient ${payment.recipientAddress}, requesting address ${value.recipientAddress}`);
-    
+
     if (payment.recipientAddress.toLowerCase() !== value.recipientAddress.toLowerCase()) {
       return res.status(403).json({
         success: false,
@@ -175,7 +177,7 @@ app.post('/api/payment/validate', async (req, res) => {
 app.post('/api/payment/attempt', async (req, res) => {
   try {
     const { paymentId, attemptAddress, attemptChainId, success, errorMessage, transactionHash } = req.body;
-    
+
     const attempt = await prisma.paymentAttempt.create({
       data: {
         paymentId,
@@ -215,19 +217,19 @@ app.post('/api/payment/attempt', async (req, res) => {
 // Record standalone transaction (send/swap)
 app.post('/api/transaction', async (req, res) => {
   try {
-    let { 
-      type, 
-      walletAddress, 
-      fromChainId, 
-      toChainId, 
-      amount, 
-      recipientAddress, 
-      tokenIn, 
-      tokenOut, 
-      success, 
-      errorMessage, 
-      transactionHash, 
-      metadata 
+    let {
+      type,
+      walletAddress,
+      fromChainId,
+      toChainId,
+      amount,
+      recipientAddress,
+      tokenIn,
+      tokenOut,
+      success,
+      errorMessage,
+      transactionHash,
+      metadata
     } = req.body;
 
     // Validate required fields based on transaction type
@@ -301,14 +303,14 @@ app.get('/api/transaction/wallet/:address', async (req, res) => {
   try {
     const { address } = req.params;
     const { limit = 50, offset = 0, type, success, direction } = req.query;
-    
+
     let whereClause = {};
-    
+
     // Handle direction filter
     if (direction === 'sent') {
       whereClause = { walletAddress: address };
     } else if (direction === 'received') {
-      whereClause = { 
+      whereClause = {
         recipientAddress: address,
         type: 'send' // Only send transactions can be received
       };
@@ -317,53 +319,53 @@ app.get('/api/transaction/wallet/:address', async (req, res) => {
       whereClause = {
         OR: [
           { walletAddress: address },
-          { 
+          {
             recipientAddress: address,
             type: 'send'
           }
         ]
       };
     }
-    
+
     // Apply type filter
     if (type && ['send', 'swap', 'received'].includes(type)) {
       if (type === 'received') {
         // For received, only 'send' type is valid in DB
-        whereClause = { 
+        whereClause = {
           recipientAddress: address,
           type: 'send'
         };
       } else if (type === 'send' || type === 'swap') {
         // For send/swap, only show sent transactions
-        whereClause = { 
-          walletAddress: address, 
-          type: type 
+        whereClause = {
+          walletAddress: address,
+          type: type
         };
       }
     }
-    
+
     if (success !== undefined) {
       whereClause.success = success === 'true';
     }
-    
+
     const transactions = await prisma.transaction.findMany({
       where: whereClause,
       orderBy: { timestamp: 'desc' },
       take: parseInt(limit),
       skip: parseInt(offset)
     });
-    
+
     const totalCount = await prisma.transaction.count({
       where: whereClause
     });
-    
+
     res.json({
       success: true,
       data: {
         transactions: transactions.map(tx => {
           // Determine if this is sent or received
           const isReceived = tx.recipientAddress === address && tx.type === 'send';
-          
+
           return {
             id: tx.id,
             type: isReceived ? 'received' : tx.type, // Change 'send' to 'received' for received transactions
@@ -404,7 +406,7 @@ app.get('/api/payment/:paymentId', async (req, res) => {
     const payment = await prisma.paymentLink.findUnique({
       where: { paymentId: req.params.paymentId }
     });
-    
+
     if (!payment) {
       return res.status(404).json({
         success: false,
@@ -441,12 +443,12 @@ app.get('/api/payment/creator/:address', async (req, res) => {
   try {
     const { address } = req.params;
     const { limit = 50, offset = 0, status } = req.query;
-    
+
     const whereClause = { creatorAddress: address };
     if (status && ['pending', 'paid'].includes(status)) {
       whereClause.status = status;
     }
-    
+
     const paymentLinks = await prisma.paymentLink.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
@@ -458,11 +460,11 @@ app.get('/api/payment/creator/:address', async (req, res) => {
         }
       }
     });
-    
+
     const totalCount = await prisma.paymentLink.count({
       where: whereClause
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -471,11 +473,11 @@ app.get('/api/payment/creator/:address', async (req, res) => {
           const successfulAttempt = payment.paymentAttempts.find(attempt => attempt.success);
           const lastAttempt = payment.paymentAttempts[0] || null;
           const failedAttempts = payment.paymentAttempts.filter(attempt => !attempt.success);
-          
+
           // Determine actual status based on attempts and payment link status
           let actualStatus = payment.status;
           let completionDetails = null;
-          
+
           if (successfulAttempt) {
             actualStatus = 'completed';
             completionDetails = {
@@ -497,7 +499,7 @@ app.get('/api/payment/creator/:address', async (req, res) => {
           } else if (failedAttempts.length > 0) {
             actualStatus = 'failed';
           }
-          
+
           return {
             paymentId: payment.paymentId,
             creatorAddress: payment.creatorAddress,
@@ -514,7 +516,7 @@ app.get('/api/payment/creator/:address', async (req, res) => {
             transactionHash: payment.transactionHash,
             metadata: payment.metadata,
             paymentUrl: `${process.env.FRONTEND_URL}/payment/${payment.paymentId}`,
-            
+
             // Attempt details
             attemptCount: payment.paymentAttempts.length,
             successfulAttempts: payment.paymentAttempts.filter(a => a.success).length,
@@ -527,10 +529,10 @@ app.get('/api/payment/creator/:address', async (req, res) => {
               errorMessage: lastAttempt.errorMessage,
               transactionHash: lastAttempt.transactionHash
             } : null,
-            
+
             // Completion details
             completionDetails,
-            
+
             // All attempts for detailed history
             allAttempts: payment.paymentAttempts.map(attempt => ({
               id: attempt.id,
