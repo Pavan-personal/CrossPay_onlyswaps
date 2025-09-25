@@ -74,7 +74,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       />
       
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 border-2 border-black">
+      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 border-2 border-black">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-black">Wallet</h2>
@@ -87,7 +87,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 px-8 space-y-4">
+        <div className="p-4 space-y-4">
           {/* Wallet Address */}
           <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
