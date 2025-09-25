@@ -138,10 +138,11 @@ onlyswaps-frontend/
 ## 📱 Usage
 
 1. **Connect Wallet**: Click the wallet button to connect your MetaMask
-2. **Swap Tokens**: Navigate to Swap page to exchange RUSD between chains
-3. **Send Payment**: Use Send page to transfer RUSD to another address
-4. **Create Payment Link**: Generate shareable payment requests
-5. **View History**: Check Transaction History for all your activities
+2. **Manage Wallet**: View balances, switch networks, and disconnect from the wallet modal
+3. **Swap Tokens**: Navigate to Swap page to exchange RUSD between chains
+4. **Send Payment**: Use Send page to transfer RUSD to another address
+5. **Create Payment Link**: Generate shareable payment requests (either QR or Links)
+6. **View History**: Check Transaction History for all your activities
 
 ## 🔒 Security
 
