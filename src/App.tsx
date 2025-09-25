@@ -107,13 +107,14 @@ function App() {
               </nav>
 
               {/* Right Side */}
-              <div className="flex items-center space-x-4">
-                {/* Chain Icon - Desktop */}
+              <div className="flex items-center space-x-2">
+                {/* Chain Icon - All devices */}
                 <button
                   onClick={() => setIsWalletModalOpen(true)}
-                  className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
+                  className="flex items-center space-x-2 px-3 py-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
                 >
                   <CubeIcon className="w-5 h-5 text-black" />
+                  <span className="hidden sm:inline text-sm font-medium">Wallet</span>
                 </button>
 
                 {/* Mobile Menu Button */}
