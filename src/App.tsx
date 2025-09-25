@@ -18,7 +18,7 @@ import {
   PaperAirplaneIcon,
   LinkIcon,
   ClockIcon,
-  CubeIcon,
+  WalletIcon,
 } from '@heroicons/react/24/outline'
 import './App.css'
 
@@ -28,6 +28,15 @@ function App() {
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const connectButtonRef = useRef<HTMLDivElement>(null)
+
+  // Get chain icon component
+  const getChainIcon = () => {
+    return (
+      <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+        <WalletIcon className="w-3 h-3 text-gray-600" />
+      </div>
+    )
+  }
 
   const handleConnectWallet = () => {
     if (connectButtonRef.current) {
@@ -111,10 +120,9 @@ function App() {
                 {/* Chain Icon - All devices */}
                 <button
                   onClick={() => setIsWalletModalOpen(true)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-center p-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
                 >
-                  <CubeIcon className="w-5 h-5 text-black" />
-                  <span className="hidden sm:inline text-sm font-medium">Wallet</span>
+                  {getChainIcon()}
                 </button>
 
                 {/* Mobile Menu Button */}

@@ -12,13 +12,14 @@ import {
   CurrencyDollarIcon,
   ArrowTopRightOnSquareIcon,
   ArrowRightIcon,
+  ArrowLeftIcon,
   ArrowsUpDownIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline'
 
 interface Transaction {
   id: string
-  type: 'send' | 'swap' | 'payment'
+  type: 'send' | 'swap' | 'payment' | 'received'
   walletAddress: string
   fromChainId: number
   toChainId: number | null
@@ -40,7 +41,7 @@ export default function TransactionHistory() {
   const [error, setError] = useState('')
   const [apiHealth, setApiHealth] = useState<boolean | null>(null)
 
-  const [typeFilter, setTypeFilter] = useState<'all' | 'send' | 'swap'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'send' | 'swap' | 'received'>('all')
   const [successFilter, setSuccessFilter] = useState<'all' | 'true' | 'false'>('all')
 
   const loadTransactions = async () => {
@@ -108,6 +109,8 @@ export default function TransactionHistory() {
         return <ArrowRightIcon className="w-5 h-5" />
       case 'swap':
         return <ArrowsUpDownIcon className="w-5 h-5" />
+      case 'received':
+        return <ArrowLeftIcon className="w-5 h-5" />
       case 'payment':
         return <CurrencyDollarIcon className="w-5 h-5" />
       default:
@@ -121,6 +124,8 @@ export default function TransactionHistory() {
         return 'text-blue-600 bg-blue-100'
       case 'swap':
         return 'text-purple-600 bg-purple-100'
+      case 'received':
+        return 'text-green-600 bg-green-100'
       case 'payment':
         return 'text-green-600 bg-green-100'
       default:
@@ -177,11 +182,13 @@ export default function TransactionHistory() {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Transaction History</h1>
-        <p className="page-subtitle">View all your cross-chain transactions and their status</p>
-      </div>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-black mb-4">Transaction History</h1>
+          <p className="text-gray-600 text-lg">View all your cross-chain transactions and their status</p>
+        </div>
 
       {/* API Health Status */}
       {apiHealth !== null && (
@@ -220,6 +227,12 @@ export default function TransactionHistory() {
               className={`filter-button ${typeFilter === 'swap' ? 'active' : ''}`}
             >
               Swap
+            </button>
+            <button
+              onClick={() => setTypeFilter('received')}
+              className={`filter-button ${typeFilter === 'received' ? 'active' : ''}`}
+            >
+              Received
             </button>
           </div>
           
@@ -301,7 +314,21 @@ export default function TransactionHistory() {
             </div>
           ) : (
             <div className="space-y-4">
-              {transactions.map((transaction) => (
+              {transactions
+                .filter((transaction) => {
+                  if (typeFilter === 'all') return true
+                  if (typeFilter === 'send') return transaction.type === 'send'
+                  if (typeFilter === 'swap') return transaction.type === 'swap'
+                  if (typeFilter === 'received') return transaction.type === 'received'
+                  return true
+                })
+                .filter((transaction) => {
+                  if (successFilter === 'all') return true
+                  if (successFilter === 'true') return transaction.success === true
+                  if (successFilter === 'false') return transaction.success === false
+                  return true
+                })
+                .map((transaction) => (
                 <div key={transaction.id} className="transaction-item">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center">
@@ -434,6 +461,7 @@ export default function TransactionHistory() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

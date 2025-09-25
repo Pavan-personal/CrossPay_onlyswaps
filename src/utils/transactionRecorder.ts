@@ -128,7 +128,7 @@ export async function recordSwapTransaction(transactionData: SwapTransactionData
 export async function getTransactionsByWallet(
   walletAddress: string,
   options: {
-    type?: 'send' | 'swap' | 'payment'
+    type?: 'send' | 'swap' | 'payment' | 'received'
     success?: boolean
     limit?: number
     offset?: number

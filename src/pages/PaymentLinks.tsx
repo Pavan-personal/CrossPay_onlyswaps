@@ -199,11 +199,13 @@ export default function PaymentLinks() {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Payment Links</h1>
-        <p className="page-subtitle">Manage your created payment links and track their status</p>
-      </div>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-black mb-4">Payment Links</h1>
+          <p className="text-gray-600 text-lg">Manage your created payment links and track their status</p>
+        </div>
 
       {/* API Health Status */}
       {apiHealth !== null && (
@@ -476,6 +478,7 @@ export default function PaymentLinks() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
