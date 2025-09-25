@@ -484,23 +484,23 @@ export default function ProcessPayment() {
             <Button 
               className={`w-full py-4 text-lg font-bold ${
                 currentStep === 'completed' 
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  ? 'bg-black text-white hover:bg-gray-800' 
                   : 'bg-black text-white hover:bg-gray-800'
               }`}
               onClick={handleCompletePayment}
               disabled={isWritePending || isConfirming}
             >
-              {currentStep === 'approving' ? '⏳ Approving...' : 
-               currentStep === 'swapping' ? '🔄 Swapping...' : 
-               currentStep === 'completed' ? '✅ Payment Completed!' :
-               currentStep === 'failed' ? '❌ Payment Failed' :
-               isWritePending ? 'Processing...' : '💳 Complete Payment'}
+              {currentStep === 'approving' ? 'Approving...' : 
+               currentStep === 'swapping' ? 'Swapping...' : 
+               currentStep === 'completed' ? 'Payment Completed!' :
+               currentStep === 'failed' ? 'Payment Failed' :
+               isWritePending ? 'Processing...' : 'Complete Payment'}
             </Button>
-            <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="bg-gray-100 p-4 rounded-lg">
               <p className="text-sm text-gray-700">
                 This will open MetaMask with TWO popups sequentially:<br/>
-                1️⃣ First popup: Approve RUSD tokens (required for swap)<br/>
-                2️⃣ Second popup: Execute cross-chain swap (opens after approval)<br/>
+                1. First popup: Approve RUSD tokens (required for swap)<br/>
+                2. Second popup: Execute cross-chain swap (opens after approval)<br/>
                 <strong>Both must be approved for payment to complete!</strong>
               </p>
             </div>
@@ -513,15 +513,15 @@ export default function ProcessPayment() {
             <h3 className="text-lg font-semibold text-black mb-4">Status</h3>
             <div className="flex items-center space-x-3">
               {currentStep === 'completed' ? (
-                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                <CheckCircleIcon className="w-6 h-6 text-black" />
               ) : currentStep === 'failed' ? (
-                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+                <ExclamationTriangleIcon className="w-6 h-6 text-black" />
               ) : (
-                <ArrowPathIcon className="w-6 h-6 text-blue-600 animate-spin" />
+                <ArrowPathIcon className="w-6 h-6 text-black animate-spin" />
               )}
               <p className={`text-lg ${
-                txStatus.includes('success') || currentStep === 'completed' ? 'text-green-600' : 
-                currentStep === 'failed' ? 'text-red-600' : 'text-blue-600'
+                txStatus.includes('success') || currentStep === 'completed' ? 'text-black' : 
+                currentStep === 'failed' ? 'text-black' : 'text-black'
               }`}>
                 {txStatus}
               </p>

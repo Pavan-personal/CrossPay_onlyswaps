@@ -397,7 +397,7 @@ export default function Send() {
               disabled={!amount || !recipientAddress || isConfirming || isRecordingTransaction}
               className={`w-full py-4 text-lg font-bold ${
                 currentStep === 'completed' 
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  ? 'bg-black text-white hover:bg-gray-800' 
                   : 'bg-black text-white hover:bg-gray-800'
               }`}
             >
@@ -412,15 +412,15 @@ export default function Send() {
             <h3 className="text-lg font-semibold text-black mb-4">Transaction Status</h3>
             <div className="flex items-center space-x-3">
               {currentStep === 'completed' ? (
-                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                <CheckCircleIcon className="w-6 h-6 text-black" />
               ) : currentStep === 'failed' ? (
-                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+                <ExclamationTriangleIcon className="w-6 h-6 text-black" />
               ) : (
-                <ArrowPathIcon className="w-6 h-6 text-blue-600 animate-spin" />
+                <ArrowPathIcon className="w-6 h-6 text-black animate-spin" />
               )}
               <p className={`text-lg ${
-                currentStep === 'failed' ? 'text-red-600' : 
-                currentStep === 'completed' ? 'text-green-600' : 'text-blue-600'
+                currentStep === 'failed' ? 'text-black' : 
+                currentStep === 'completed' ? 'text-black' : 'text-black'
               }`}>
                 {txStatus}
               </p>

@@ -9,15 +9,27 @@ import Send from './pages/Send'
 import ProcessPayment from './pages/ProcessPayment'
 import TransactionHistory from './components/TransactionHistory'
 import PaymentLinks from './pages/PaymentLinks'
+import WalletModal from './components/WalletModal'
+import MobileNav from './components/MobileNav'
+import {
+  Bars3Icon,
+  ArrowPathIcon,
+  PlusIcon,
+  PaperAirplaneIcon,
+  LinkIcon,
+  ClockIcon,
+  CubeIcon,
+} from '@heroicons/react/24/outline'
 import './App.css'
 
 function App() {
   const { isConnected } = useAccount()
   const [showLanding, setShowLanding] = useState(!isConnected)
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const connectButtonRef = useRef<HTMLDivElement>(null)
 
   const handleConnectWallet = () => {
-    // Trigger the ConnectButton click programmatically
     if (connectButtonRef.current) {
       const button = connectButtonRef.current.querySelector('button')
       if (button) {
@@ -27,16 +39,13 @@ function App() {
   }
 
   const handleStartSwapping = () => {
-    // If wallet is connected, hide landing page to show main app
     if (isConnected) {
       setShowLanding(false)
     } else {
-      // If wallet not connected, trigger wallet connection first
       handleConnectWallet()
     }
   }
 
-  // Hide landing page when wallet gets connected
   useEffect(() => {
     if (isConnected) {
       setShowLanding(false)
@@ -47,12 +56,11 @@ function App() {
   if (showLanding && !isConnected) {
     return (
       <div className="App">
-        <LandingPage 
-          onConnectWallet={handleConnectWallet} 
-          isWalletConnected={isConnected} 
+        <LandingPage
+          onConnectWallet={handleConnectWallet}
+          isWalletConnected={isConnected}
           onStartSwapping={handleStartSwapping}
         />
-        {/* Hidden ConnectButton that we can trigger programmatically */}
         <div ref={connectButtonRef} className="hidden">
           <ConnectButton />
         </div>
@@ -63,21 +71,70 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <header className="app-header">
-          <div className="header-content">
-            <h1>CrossPay</h1>
-            <nav className="main-nav">
-              <Link to="/swap" className="nav-link">Swap</Link>
-              <Link to="/create" className="nav-link">Create Payment</Link>
-              <Link to="/send" className="nav-link">Send</Link>
-              <Link to="/payments" className="nav-link">Payments</Link>
-              <Link to="/history" className="nav-link">History</Link>
-            </nav>
-            <ConnectButton />
+        {/* Header */}
+        <header className="bg-white border-b-2 border-black sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              {/* Logo */}
+              <div className="flex items-center">
+                <Link to="/" className="text-2xl font-bold text-black">
+                  CrossPay
+                </Link>
+              </div>
+
+              {/* Desktop Navigation */}
+              <nav className="hidden lg:flex items-center space-x-8">
+                <Link to="/swap" className="flex items-center space-x-2 text-gray-700 hover:text-black transition-colors">
+                  <ArrowPathIcon className="w-4 h-4" />
+                  <span>Swap</span>
+                </Link>
+                <Link to="/create" className="flex items-center space-x-2 text-gray-700 hover:text-black transition-colors">
+                  <PlusIcon className="w-4 h-4" />
+                  <span>Create</span>
+                </Link>
+                <Link to="/send" className="flex items-center space-x-2 text-gray-700 hover:text-black transition-colors">
+                  <PaperAirplaneIcon className="w-4 h-4" />
+                  <span>Send</span>
+                </Link>
+                <Link to="/payments" className="flex items-center space-x-2 text-gray-700 hover:text-black transition-colors">
+                  <LinkIcon className="w-4 h-4" />
+                  <span>Payments</span>
+                </Link>
+                <Link to="/history" className="flex items-center space-x-2 text-gray-700 hover:text-black transition-colors">
+                  <ClockIcon className="w-4 h-4" />
+                  <span>History</span>
+                </Link>
+              </nav>
+
+              {/* Right Side */}
+              <div className="flex items-center space-x-4">
+                {/* Chain Icon - Desktop */}
+                <button
+                  onClick={() => setIsWalletModalOpen(true)}
+                  className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
+                >
+                  <CubeIcon className="w-5 h-5 text-black" />
+                </button>
+
+                {/* Mobile Menu Button */}
+                <button
+                  onClick={() => setIsMobileNavOpen(true)}
+                  className="lg:hidden p-2 rounded-lg border-2 border-black hover:bg-gray-100 transition-colors"
+                >
+                  <Bars3Icon className="w-5 h-5 text-black" />
+                </button>
+
+                {/* Connect Button - Hidden but functional */}
+                <div ref={connectButtonRef} className="hidden">
+                  <ConnectButton />
+                </div>
+              </div>
+            </div>
           </div>
         </header>
 
-        <main className="app-main">
+        {/* Main Content */}
+        <main className="min-h-screen bg-white">
           <Routes>
             <Route path="/" element={<Navigate to="/swap" replace />} />
             <Route path="/swap" element={<Swap />} />
@@ -90,9 +147,24 @@ function App() {
           </Routes>
         </main>
 
-        <footer className="app-footer">
-          <p>&copy; 2024 CrossPay - Cross-chain RUSD payments</p>
+        {/* Footer */}
+        <footer className="bg-black text-white py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <p className="text-sm">&copy; 2024 CrossPay - Cross-chain RUSD payments</p>
+            </div>
+          </div>
         </footer>
+
+        {/* Modals */}
+        <WalletModal 
+          isOpen={isWalletModalOpen} 
+          onClose={() => setIsWalletModalOpen(false)} 
+        />
+        <MobileNav 
+          isOpen={isMobileNavOpen} 
+          onClose={() => setIsMobileNavOpen(false)} 
+        />
       </div>
     </Router>
   )
