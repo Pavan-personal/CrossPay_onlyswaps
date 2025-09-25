@@ -4,20 +4,11 @@ import { parseEther } from 'viem'
 import { recordSendTransaction, type SendTransactionData } from '../utils/transactionRecorder'
 import { Button } from '@/components/ui/button'
 import {
-  ArrowRightIcon,
+  ArrowPathIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  WalletIcon,
-  CubeIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
-  BeakerIcon,
-  CheckBadgeIcon,
   XCircleIcon,
-  ArrowTopRightOnSquareIcon,
-  UserIcon,
 } from '@heroicons/react/24/outline'
-
 
 // Contract addresses for different chains
 const CONTRACT_ADDRESSES = {
@@ -30,19 +21,6 @@ const CONTRACT_ADDRESSES = {
     ROUTER: '0x3dD1a497846d060Dce130B67b22E1F9DeE18c051' // Same address on both chains
   }
 }
-
-const ERC20_ABI = [
-  {
-    "inputs": [
-      {"name": "spender", "type": "address"},
-      {"name": "amount", "type": "uint256"}
-    ],
-    "name": "approve",
-    "outputs": [{"name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-]
 
 const ROUTER_ABI = [
   {
@@ -61,19 +39,33 @@ const ROUTER_ABI = [
   }
 ]
 
-function FaucetButton({ chainId }: { chainId: number }) {
-  const { address } = useAccount()
+function FaucetButton({ chainId, address }: { chainId: number, address: string | undefined }) {
   const { writeContract, isPending } = useWriteContract()
 
   const handleFaucet = async () => {
-    if (!address) return
+    if (!chainId || !address) return
+
+    const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
+    if (!contracts) {
+      alert(`Unsupported chain: ${chainId}`)
+      return
+    }
 
     try {
-      await writeContract({
-        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [address, parseEther('1000')]
+      writeContract({
+        address: contracts.RUSD as `0x${string}`,
+        abi: [
+          {
+            "inputs": [{"name": "to", "type": "address"}, {"name": "amount", "type": "uint256"}],
+            "name": "mint",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ],
+        functionName: 'mint',
+        args: [address as `0x${string}`, parseEther('1000')],
+        chainId,
       })
     } catch (error) {
       console.error('Faucet error:', error)
@@ -84,16 +76,9 @@ function FaucetButton({ chainId }: { chainId: number }) {
     <Button
       onClick={handleFaucet}
       disabled={isPending}
-      variant="outline"
-      size="sm"
-      className="w-full"
+      className="bg-gray-800 text-white hover:bg-gray-700"
     >
-      {isPending ? (
-        <div className="spinner mr-2" />
-      ) : (
-        <BeakerIcon className="w-4 h-4 mr-2" />
-      )}
-      Get Test RUSD
+      {isPending ? 'Requesting...' : 'Get 1000 RUSD'}
     </Button>
   )
 }
@@ -101,25 +86,54 @@ function FaucetButton({ chainId }: { chainId: number }) {
 export default function Send() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { writeContract, isPending, data: txHash } = useWriteContract()
-  const { data: hash, isSuccess, isError: isTxError } = useWaitForTransactionReceipt({
+  const { writeContract, data: txHash } = useWriteContract()
+
+  // Sequential transaction tracking
+  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'sending' | 'completed' | 'failed'>('idle')
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [, setIsConfirmed] = useState(false)
+
+  const { data: hash, isSuccess: isTxSuccess, isError: isTxError } = useWaitForTransactionReceipt({
     hash: txHash,
   })
 
-  const [amount, setAmount] = useState('')
+  // State
   const [recipientAddress, setRecipientAddress] = useState('')
+  const [amount, setAmount] = useState('')
   const [solverFee, setSolverFee] = useState('0.01')
-  const [destinationChainId, setDestinationChainId] = useState(43113)
-  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping'>('idle')
+  const [destinationChainId, setDestinationChainId] = useState(43113) // Default to Avalanche Fuji
+  const [txStatus, setTxStatus] = useState('')
+
+  // Transaction recording state
   const [isRecordingTransaction, setIsRecordingTransaction] = useState(false)
   const [transactionRecorded, setTransactionRecorded] = useState(false)
 
+  // Toast state
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    setToast({ message, type })
+  }
+
+  const closeToast = () => {
+    setToast(null)
+  }
+
+  // Get current chain name
+  const getCurrentChainName = (chainId: number) => {
+    switch (chainId) {
+      case 84532: return 'Base Sepolia'
+      case 43113: return 'Avalanche Fuji'
+      default: return `Unknown (${chainId})`
+    }
+  }
+
   // Record transaction to backend
-  const recordTransaction = async (success: boolean, transactionHash?: string, errorMessage?: string) => {
+  const recordTransaction = async (success: boolean, transactionHash?: `0x${string}`, errorMessage?: string) => {
     if (!address || transactionRecorded) return
 
     setIsRecordingTransaction(true)
-    
+
     try {
       const transactionData: SendTransactionData = {
         walletAddress: address,
@@ -135,7 +149,7 @@ export default function Send() {
 
       console.log('📝 Recording send transaction:', transactionData)
       const result = await recordSendTransaction(transactionData)
-      
+
       if (result.success) {
         console.log('✅ Send transaction recorded successfully:', result.data)
         setTransactionRecorded(true)
@@ -149,390 +163,305 @@ export default function Send() {
     }
   }
 
-  // Handle transaction success
-  useEffect(() => {
-    if (isSuccess && hash) {
-      console.log('✅ Transaction successful:', hash)
-      setCurrentStep('idle')
-      
-      if (currentStep === 'swapping') {
-        // Swap succeeded - record successful transaction
-        console.log('🎉 Send completed successfully!')
-        recordTransaction(true, hash.transactionHash)
-      }
-    }
-  }, [isSuccess, hash, currentStep])
-
-  // Handle transaction error
-  useEffect(() => {
-    if (isTxError) {
-      console.error('❌ Transaction failed')
-      setCurrentStep('idle')
-      recordTransaction(false, undefined, 'Transaction failed')
-    }
-  }, [isTxError])
-
-  const executeSwap = async () => {
-    if (!address || !amount || !recipientAddress || !solverFee) return
+  const executeSend = async () => {
+    if (!address || !recipientAddress || !amount) return
 
     try {
-      setCurrentStep('approving')
-      
-      // First approve the router to spend RUSD
-      await writeContract({
-        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [
-          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
-          parseEther(amount)
-        ]
-      })
+      const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
+      if (!contracts) {
+        throw new Error(`Unsupported chain: ${chainId}`)
+      }
 
-      setCurrentStep('swapping')
-      
-      // Then execute the cross-chain swap
+      setTxStatus('Executing cross-chain send...')
+      const amountWei = parseEther(amount)
+      const solverFeeWei = parseEther(solverFee)
+
+      console.log('📝 Submitting send transaction...')
       writeContract({
-        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
+        address: contracts.ROUTER as `0x${string}`,
         abi: ROUTER_ABI,
         functionName: 'requestCrossChainSwap',
         args: [
-          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-          CONTRACT_ADDRESSES[destinationChainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-          parseEther(amount),
-          parseEther(solverFee),
-          BigInt(destinationChainId),
-          recipientAddress
-        ]
+          contracts.RUSD as `0x${string}`, // tokenIn
+          contracts.RUSD as `0x${string}`, // tokenOut
+          amountWei,  // amount
+          solverFeeWei, // solverFee
+          destinationChainId, // destinationChainId
+          recipientAddress as `0x${string}` // recipient
+        ],
+        chainId,
       })
+
+      setTxStatus('Send transaction submitted - waiting for confirmation...')
+
     } catch (error) {
-      console.error('❌ Send execution failed:', error)
-      setCurrentStep('idle')
+      console.error('Send execution error:', error)
+      setTxStatus('Send failed')
+      setCurrentStep('failed')
+      setIsConfirming(false)
+
+      // Record failed transaction
       const errorMessage = error instanceof Error ? error.message : 'Send execution failed'
       recordTransaction(false, undefined, errorMessage)
     }
   }
 
-  const handleCompleteSend = async () => {
-    try {
-      await executeSwap()
-    } catch (error) {
-      console.error('❌ Send failed:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Send failed'
-      recordTransaction(false, undefined, errorMessage)
+  // Monitor transaction receipt
+  useEffect(() => {
+    if (isTxSuccess) {
+      console.log('✅ Transaction confirmed:', hash)
+      setTxStatus('Send completed successfully!')
+      setCurrentStep('completed')
+      setIsConfirming(false)
+      setIsConfirmed(true)
+
+      // Record successful transaction
+      recordTransaction(true, hash.transactionHash)
+    } else if (isTxError) {
+      console.error('❌ Transaction failed')
+      setTxStatus('Transaction failed')
+      setCurrentStep('failed')
+      setIsConfirming(false)
+
+      // Record failed transaction
+      recordTransaction(false, hash?.transactionHash, 'Transaction failed')
     }
+  }, [isTxSuccess, isTxError, hash])
+
+  // Reset states when starting new transaction
+  const resetStates = () => {
+    setAmount('')
+    setRecipientAddress('')
+    setDestinationChainId(43113)
+    setTxStatus('')
+    setCurrentStep('idle')
+    setIsConfirming(false)
+    setIsConfirmed(false)
+    setTransactionRecorded(false)
   }
 
-  const getChainName = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'Base Sepolia'
-      case 43113: return 'Avalanche Fuji'
-      default: return `Chain ${chainId}`
+  const handleSend = async () => {
+    if (!isConnected) {
+      showToast('Please connect your wallet first', 'error')
+      return
     }
-  }
 
-  const getChainColor = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'bg-blue-500'
-      case 43113: return 'bg-red-500'
-      default: return 'bg-gray-500'
+    if (!recipientAddress || !amount || !solverFee) {
+      showToast('Please fill in all required fields', 'error')
+      return
     }
+
+    if (parseFloat(amount) <= 0) {
+      showToast('Please enter a valid amount', 'error')
+      return
+    }
+
+    if (parseFloat(solverFee) <= 0) {
+      showToast('Please enter a valid solver fee', 'error')
+      return
+    }
+
+    resetStates()
+    setCurrentStep('sending')
+    setIsConfirming(true)
+    
+    executeSend()
   }
 
   if (!isConnected) {
     return (
-      <div className="page-container">
-        <div className="page-header">
-          <h1 className="page-title">Send Payment</h1>
-          <p className="page-subtitle">Connect your wallet to start sending RUSD across chains</p>
-        </div>
-        
-        <div className="card max-w-md mx-auto text-center">
-          <WalletIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-gray-600 mb-6">Please connect your wallet to access the send functionality.</p>
-          <Button size="lg" className="w-full">
-            <WalletIcon className="w-5 h-5 mr-2" />
-            Connect Wallet
-          </Button>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircleIcon className="w-8 h-8 text-gray-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">Connect Your Wallet</h1>
+          <p className="text-gray-600 text-lg">Please connect your wallet to send RUSD.</p>
         </div>
       </div>
     )
   }
 
+  const currentChainName = getCurrentChainName(chainId)
+  const destinationChainName = getCurrentChainName(destinationChainId)
+
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Send Payment</h1>
-        <p className="page-subtitle">Send RUSD tokens to any address across Base Sepolia and Avalanche Fuji testnets</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Send Form */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title flex items-center">
-              <ArrowRightIcon className="w-6 h-6 mr-2" />
-              Send Configuration
-            </h2>
-            <p className="card-subtitle">Configure your cross-chain payment parameters</p>
+    <div className="min-h-screen bg-white">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+          toast.type === 'success' ? 'bg-green-500 text-white' :
+          toast.type === 'error' ? 'bg-red-500 text-white' :
+          'bg-blue-500 text-white'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{toast.message}</span>
+            <button onClick={closeToast} className="ml-4 text-white hover:text-gray-200">
+              <XCircleIcon className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      )}
+      
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-black mb-4">Send Payment</h1>
+          <p className="text-gray-600 text-lg">
+            Send RUSD tokens to another address across different networks
+          </p>
+        </div>
 
+        {/* Network Info */}
+        <div className="bg-gray-100 rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-black">Current Network</h3>
+              <p className="text-gray-600">{currentChainName} (Chain ID: {chainId})</p>
+            </div>
+            <FaucetButton chainId={chainId || 84532} address={address} />
+          </div>
+        </div>
+
+        {/* Send Form */}
+        <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
+          <h2 className="text-2xl font-bold text-black mb-6">Send Details</h2>
+          
           <div className="space-y-6">
-            {/* Recipient Address */}
-            <div className="form-group">
-              <label className="form-label">Recipient Address</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={recipientAddress}
-                  onChange={(e) => setRecipientAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="form-input pr-12"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <UserIcon className="w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">Enter the recipient's wallet address</p>
+            <div>
+              <label htmlFor="recipientAddress" className="block text-sm font-medium text-gray-700 mb-2">Recipient Address</label>
+              <input
+                type="text"
+                id="recipientAddress"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={recipientAddress}
+                onChange={(e) => setRecipientAddress(e.target.value)}
+                placeholder="0x..."
+              />
             </div>
 
-            {/* Amount Input */}
-            <div className="form-group">
-              <label className="form-label">Amount (RUSD)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.0"
-                  className="form-input pr-12"
-                  step="0.01"
-                  min="0"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <span className="text-sm font-mono text-gray-500">RUSD</span>
-                </div>
-              </div>
+            <div>
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">Amount (RUSD)</label>
+              <input
+                type="number"
+                id="amount"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+              />
             </div>
 
-            {/* Solver Fee */}
-            <div className="form-group">
-              <label className="form-label">Solver Fee (ETH)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={solverFee}
-                  onChange={(e) => setSolverFee(e.target.value)}
-                  placeholder="0.01"
-                  className="form-input pr-12"
-                  step="0.001"
-                  min="0"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <span className="text-sm font-mono text-gray-500">ETH</span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">Fee paid to solver for executing the cross-chain transfer</p>
+            <div>
+              <label htmlFor="solverFee" className="block text-sm font-medium text-gray-700 mb-2">Solver Fee (RUSD)</label>
+              <input
+                type="number"
+                id="solverFee"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={solverFee}
+                onChange={(e) => setSolverFee(e.target.value)}
+                placeholder="0.01"
+                min="0"
+                step="0.001"
+              />
             </div>
 
-            {/* Destination Chain */}
-            <div className="form-group">
-              <label className="form-label">Destination Chain</label>
+            <div>
+              <label htmlFor="destinationChain" className="block text-sm font-medium text-gray-700 mb-2">Destination Chain</label>
               <select
+                id="destinationChain"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
                 value={destinationChainId}
                 onChange={(e) => setDestinationChainId(Number(e.target.value))}
-                className="form-select"
               >
-                <option value={43113}>Avalanche Fuji</option>
                 <option value={84532}>Base Sepolia</option>
+                <option value={43113}>Avalanche Fuji</option>
               </select>
             </div>
 
-            {/* Send Button */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Sending from:</span>
+                <span className="font-semibold text-black">{currentChainName}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm mt-1">
+                <span className="text-gray-600">Sending to:</span>
+                <span className="font-semibold text-black">{destinationChainName}</span>
+              </div>
+            </div>
+
             <Button
-              onClick={handleCompleteSend}
-              disabled={!amount || !recipientAddress || !solverFee || isPending || currentStep !== 'idle'}
-              size="lg"
-              className="w-full"
+              onClick={handleSend}
+              disabled={!amount || !recipientAddress || isConfirming || isRecordingTransaction}
+              className={`w-full py-4 text-lg font-bold ${
+                currentStep === 'completed' 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  : 'bg-black text-white hover:bg-gray-800'
+              }`}
             >
-              {isPending ? (
-                <>
-                  <div className="spinner mr-2" />
-                  {currentStep === 'approving' ? 'Approving...' : 'Sending...'}
-                </>
-              ) : (
-                <>
-                  <ArrowRightIcon className="w-5 h-5 mr-2" />
-                  Send Payment
-                </>
-              )}
+              {isConfirming ? 'Processing...' : isRecordingTransaction ? 'Recording...' : 'Send RUSD'}
             </Button>
           </div>
         </div>
 
-        {/* Send Details & Status */}
-        <div className="space-y-6">
-          {/* Current Chain Info */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <CubeIcon className="w-5 h-5 mr-2" />
-                Current Network
-              </h3>
+        {/* Transaction Status */}
+        {txStatus && (
+          <div className="bg-gray-100 rounded-lg p-6 mb-8">
+            <h3 className="text-lg font-semibold text-black mb-4">Transaction Status</h3>
+            <div className="flex items-center space-x-3">
+              {currentStep === 'completed' ? (
+                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+              ) : currentStep === 'failed' ? (
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+              ) : (
+                <ArrowPathIcon className="w-6 h-6 text-blue-600 animate-spin" />
+              )}
+              <p className={`text-lg ${
+                currentStep === 'failed' ? 'text-red-600' : 
+                currentStep === 'completed' ? 'text-green-600' : 'text-blue-600'
+              }`}>
+                {txStatus}
+              </p>
             </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${getChainColor(chainId)}`}></div>
-                <span className="font-semibold">{getChainName(chainId)}</span>
+            
+            {hash && (
+              <div className="mt-4 p-4 bg-white rounded-lg border">
+                <p className="text-sm text-gray-600 mb-2">Transaction Hash:</p>
+                <p className="font-mono text-sm break-all">{hash.transactionHash}</p>
+                <a
+                  href={`https://sepolia.basescan.org/tx/${hash.transactionHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
+                >
+                  View on Block Explorer →
+                </a>
               </div>
-              <span className="text-sm font-mono text-gray-600">Chain ID: {chainId}</span>
-            </div>
+            )}
+
+            {(currentStep === 'completed' || currentStep === 'failed') && (
+              <Button
+                onClick={resetStates}
+                className="w-full mt-4 bg-gray-300 text-gray-800 hover:bg-gray-400"
+              >
+                Start New Send
+              </Button>
+            )}
           </div>
+        )}
 
-          {/* Send Summary */}
-          {amount && recipientAddress && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title flex items-center">
-                  <CurrencyDollarIcon className="w-5 h-5 mr-2" />
-                  Send Summary
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">From</span>
-                  <span className="font-semibold">{getChainName(chainId)}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">To</span>
-                  <span className="font-semibold">{getChainName(destinationChainId)}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">Recipient</span>
-                  <span className="font-mono text-sm text-gray-600 truncate max-w-32">
-                    {recipientAddress.slice(0, 6)}...{recipientAddress.slice(-4)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">Amount</span>
-                  <span className="font-semibold font-mono">{amount} RUSD</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600">Solver Fee</span>
-                  <span className="font-semibold font-mono">{solverFee} ETH</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Transaction Status */}
-          {(currentStep !== 'idle' || isSuccess || isTxError) && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title flex items-center">
-                  <ClockIcon className="w-5 h-5 mr-2" />
-                  Transaction Status
-                </h3>
-              </div>
-              <div className="space-y-4">
-                {currentStep === 'approving' && (
-                  <div className="flex items-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-yellow-800">Approving RUSD</p>
-                      <p className="text-sm text-yellow-600">Please confirm the approval transaction in your wallet</p>
-                    </div>
-                  </div>
-                )}
-
-                {currentStep === 'swapping' && (
-                  <div className="flex items-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-blue-800">Sending Payment</p>
-                      <p className="text-sm text-blue-600">Cross-chain payment in progress...</p>
-                    </div>
-                  </div>
-                )}
-
-                {isSuccess && (
-                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckCircleIcon className="w-6 h-6 mr-3 text-green-600" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-green-800">Payment Sent!</p>
-                      <p className="text-sm text-green-600">Your RUSD has been sent to {recipientAddress.slice(0, 6)}...{recipientAddress.slice(-4)} on {getChainName(destinationChainId)}</p>
-                      {hash && (
-                        <a
-                          href={`https://${chainId === 84532 ? 'sepolia.basescan.org' : 'testnet.snowtrace.io'}/tx/${hash.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center mt-2 text-sm text-green-700 hover:text-green-800"
-                        >
-                          View Transaction
-                          <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {isTxError && (
-                  <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <XCircleIcon className="w-6 h-6 mr-3 text-red-600" />
-                    <div>
-                      <p className="font-semibold text-red-800">Send Failed</p>
-                      <p className="text-sm text-red-600">Transaction was not successful</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Recording Status */}
-                {isRecordingTransaction && (
-                  <div className="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-gray-800">Recording Transaction</p>
-                      <p className="text-sm text-gray-600">Saving transaction details...</p>
-                    </div>
-                  </div>
-                )}
-
-                {transactionRecorded && (
-                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckBadgeIcon className="w-6 h-6 mr-3 text-green-600" />
-                    <div>
-                      <p className="font-semibold text-green-800">Transaction Recorded</p>
-                      <p className="text-sm text-green-600">Transaction details saved successfully</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Faucet Section */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <BeakerIcon className="w-5 h-5 mr-2" />
-                Testnet Faucet
-              </h3>
-              <p className="card-subtitle">Get test RUSD tokens for testing</p>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start">
-                  <ExclamationTriangleIcon className="w-5 h-5 mr-2 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-yellow-800 font-semibold">Testnet Only</p>
-                    <p className="text-sm text-yellow-700">This faucet provides test RUSD tokens with no real value</p>
-                  </div>
-                </div>
-              </div>
-              <FaucetButton chainId={chainId} />
-            </div>
-          </div>
+        {/* Instructions */}
+        <div className="bg-blue-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-black mb-4">How to Send RUSD</h3>
+          <ol className="list-decimal list-inside space-y-2 text-gray-700">
+            <li>Enter the recipient's wallet address</li>
+            <li>Enter the amount of RUSD you want to send</li>
+            <li>Set the solver fee (paid in RUSD) for cross-chain execution</li>
+            <li>Select the destination chain for the recipient</li>
+            <li>Click "Send RUSD" and confirm the transaction in your wallet</li>
+          </ol>
         </div>
       </div>
     </div>

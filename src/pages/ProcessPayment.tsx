@@ -4,17 +4,10 @@ import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt 
 import { parseEther, formatEther } from 'viem'
 import { Button } from '@/components/ui/button'
 import {
-  WalletIcon,
-  CubeIcon,
-  CurrencyDollarIcon,
-  ClockIcon,
+  XCircleIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
-  BeakerIcon,
-  XCircleIcon,
-  CheckBadgeIcon,
 } from '@heroicons/react/24/outline'
 
 const API_BASE_URL = 'http://localhost:3001/api/payment'
@@ -64,8 +57,45 @@ const ROUTER_ABI = [
   }
 ]
 
-function FaucetButton({ chainId }: { chainId: number }) {
-  const { address } = useAccount()
+// API Functions
+const validatePayment = async (paymentId: string, recipientAddress: string) => {
+  const response = await fetch(`${API_BASE_URL}/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paymentId, recipientAddress }),
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to validate payment')
+  }
+  
+  return response.json()
+}
+
+const recordPaymentAttempt = async (paymentId: string, attemptAddress: string, attemptChainId: number, success: boolean, transactionHash?: string, errorMessage?: string) => {
+  const response = await fetch(`${API_BASE_URL}/attempt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      paymentId,
+      attemptAddress,
+      attemptChainId,
+      success,
+      transactionHash,
+      errorMessage
+    }),
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to record payment attempt')
+  }
+  
+  return response.json()
+}
+
+function FaucetButton({ chainId, address }: { chainId: number, address: string | undefined }) {
   const { writeContract, isPending } = useWriteContract()
 
   const handleFaucet = async () => {
@@ -96,16 +126,9 @@ function FaucetButton({ chainId }: { chainId: number }) {
     <Button
       onClick={handleFaucet}
       disabled={isPending}
-      variant="outline"
-      size="sm"
-      className="w-full"
+      className="bg-gray-800 text-white hover:bg-gray-700"
     >
-      {isPending ? (
-        <div className="spinner mr-2" />
-      ) : (
-        <BeakerIcon className="w-4 h-4 mr-2" />
-      )}
-      Get 1000 RUSD
+      {isPending ? 'Requesting...' : 'Get 1000 RUSD'}
     </Button>
   )
 }
@@ -114,212 +137,286 @@ export default function ProcessPayment() {
   const { paymentId } = useParams<{ paymentId: string }>()
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { writeContract, isPending, data: txHash } = useWriteContract()
-  const { data: hash, isSuccess, isError: isTxError } = useWaitForTransactionReceipt({
+  const { writeContract, isPending: isWritePending, data: txHash } = useWriteContract()
+  
+  // Custom confirmation state to avoid the useWaitForTransactionReceipt issue
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'completed' | 'failed'>('idle')
+  
+  // State
+  const [manualPaymentId, setManualPaymentId] = useState('')
+  const [paymentData, setPaymentData] = useState<any>(null)
+  const [isValidating, setIsValidating] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  const [txStatus, setTxStatus] = useState('')
+  const [hasValidated, setHasValidated] = useState(false)
+
+  // Use paymentId from URL params, or manual input
+  const currentPaymentId = paymentId || manualPaymentId
+  
+  // Only call useWaitForTransactionReceipt when we have a transaction hash
+  const { data: hash, isSuccess: isTxSuccess, isError: isTxError } = useWaitForTransactionReceipt({
     hash: txHash,
   })
 
-  const [paymentData, setPaymentData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [solverFee, setSolverFee] = useState('0.01')
-  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping'>('idle')
-  const [isRecordingTransaction, setIsRecordingTransaction] = useState(false)
-  const [transactionRecorded, setTransactionRecorded] = useState(false)
-
-  const getChainName = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'Base Sepolia'
-      case 43113: return 'Avalanche Fuji'
-      default: return `Chain ${chainId}`
-    }
-  }
-
-  const getChainColor = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'bg-blue-500'
-      case 43113: return 'bg-red-500'
-      default: return 'bg-gray-500'
-    }
-  }
-
-  useEffect(() => {
-    const fetchPaymentData = async () => {
-      if (!paymentId) return
-
-      try {
-        setLoading(true)
-        const response = await fetch(`${API_BASE_URL}/${paymentId}`)
-        
-        if (!response.ok) {
-          throw new Error('Payment not found')
-        }
-
-        const data = await response.json()
-        setPaymentData(data)
-      } catch (error) {
-        console.error('Failed to fetch payment data:', error)
-        setError(error instanceof Error ? error.message : 'Failed to load payment')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchPaymentData()
-  }, [paymentId])
-
-  // Record transaction to backend
-  const recordTransaction = async (success: boolean, transactionHash?: string, errorMessage?: string) => {
-    if (!address || transactionRecorded) return
-
-    setIsRecordingTransaction(true)
-    
-    try {
-      const response = await fetch(`${API_BASE_URL}/attempt`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          paymentId,
-          walletAddress: address,
-          success,
-          transactionHash,
-          errorMessage
-        }),
-      })
-
-      if (response.ok) {
-        console.log('✅ Payment attempt recorded successfully')
-        setTransactionRecorded(true)
-      } else {
-        console.error('❌ Failed to record payment attempt')
-      }
-    } catch (error) {
-      console.error('❌ Error recording payment attempt:', error)
-    } finally {
-      setIsRecordingTransaction(false)
-    }
-  }
-
   // Handle transaction success
   useEffect(() => {
-    if (isSuccess && hash) {
-      console.log('✅ Transaction successful:', hash)
-      setCurrentStep('idle')
+    if (isTxSuccess && hash) {
+      console.log('✅ Transaction confirmed:', hash)
       
-      if (currentStep === 'swapping') {
-        // Payment succeeded - record successful transaction
-        console.log('🎉 Payment completed successfully!')
-        recordTransaction(true, hash.transactionHash)
+      if (currentStep === 'approving') {
+        // Approval succeeded, now execute swap
+        setCurrentStep('swapping')
+        setTxStatus('Approval successful! Now executing swap...')
+        executeSwap()
+      } else if (currentStep === 'swapping') {
+        // Swap succeeded
+        setIsConfirming(false)
+        setCurrentStep('completed')
+        setTxStatus(`Payment completed successfully! Transaction: ${hash.transactionHash}`)
+        
+        // Record successful payment attempt
+        if (currentPaymentId && address) {
+          recordPaymentAttempt(currentPaymentId, address, chainId || 0, true, hash.transactionHash)
+        }
       }
     }
-  }, [isSuccess, hash, currentStep])
+  }, [isTxSuccess, hash, currentStep, currentPaymentId, address, chainId])
 
   // Handle transaction error
   useEffect(() => {
     if (isTxError) {
-      console.error('❌ Transaction failed')
-      setCurrentStep('idle')
-      recordTransaction(false, undefined, 'Transaction failed')
+      console.log('❌ Transaction failed')
+      setIsConfirming(false)
+      setCurrentStep('failed')
+      setTxStatus('Transaction failed')
+      
+      // Record failed payment attempt
+      if (currentPaymentId && address) {
+        recordPaymentAttempt(currentPaymentId, address, chainId || 0, false, undefined, 'Transaction failed')
+      }
     }
-  }, [isTxError])
+  }, [isTxError, currentPaymentId, address, chainId])
 
-  const executePayment = async () => {
-    if (!address || !paymentData || !solverFee) return
+  const validatePaymentLink = async () => {
+    if (!currentPaymentId || !address || hasValidated) {
+      return
+    }
+
+    setHasValidated(true)
+    setIsValidating(true)
+    setValidationError('')
 
     try {
-      setCurrentStep('approving')
-      
-      // First approve the router to spend RUSD
-      await writeContract({
-        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [
-          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
-          parseEther(paymentData.amount)
-        ]
-      })
+      const result = await validatePayment(currentPaymentId, address)
+      setPaymentData(result.data)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setValidationError(errorMessage)
+    } finally {
+      setIsValidating(false)
+    }
+  }
 
-      setCurrentStep('swapping')
-      
-      // Then execute the cross-chain swap
+  const executeSwap = async () => {
+    if (!address || !paymentData) return
+
+    try {
+      const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
+      if (!contracts) {
+        throw new Error(`Unsupported chain: ${chainId}`)
+      }
+
+      setTxStatus('Executing cross-chain swap...')
+      const amountWei = BigInt(paymentData.amount.toString())
+      const solverFeeWei = BigInt(paymentData.solverFee.toString())
+
       writeContract({
-        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
+        address: contracts.ROUTER as `0x${string}`,
         abi: ROUTER_ABI,
         functionName: 'requestCrossChainSwap',
         args: [
-          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-          CONTRACT_ADDRESSES[paymentData.destinationChainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
-          parseEther(paymentData.amount),
-          parseEther(solverFee),
-          BigInt(paymentData.destinationChainId),
-          address
-        ]
+          contracts.RUSD, // tokenIn
+          contracts.RUSD, // tokenOut
+          amountWei,  // amount
+          solverFeeWei, // solverFee
+          paymentData.destinationChainId, // destinationChainId
+          paymentData.creatorAddress as `0x${string}` // creator (who will receive the money!)
+        ],
+        chainId,
       })
+      
+      setTxStatus('Swap transaction submitted - waiting for confirmation...')
+
     } catch (error) {
-      console.error('❌ Payment execution failed:', error)
-      setCurrentStep('idle')
-      const errorMessage = error instanceof Error ? error.message : 'Payment execution failed'
-      recordTransaction(false, undefined, errorMessage)
+      console.error('Swap execution error:', error)
+      setTxStatus('Swap failed')
+      setCurrentStep('failed')
+      setIsConfirming(false)
     }
   }
 
   const handleCompletePayment = async () => {
+    if (!address || !paymentData) {
+      return
+    }
+
+    setTxStatus('Starting payment process...')
+    setIsConfirming(true)
+    setCurrentStep('approving')
+    
     try {
-      await executePayment()
+      // Get contract addresses for current chain
+      const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
+      if (!contracts) {
+        throw new Error(`Unsupported chain: ${chainId}`)
+      }
+
+      // Convert string amounts to BigInt properly
+      const amountWei = BigInt(paymentData.amount.toString())
+      const feeWei = BigInt(paymentData.solverFee.toString())
+      const totalCost = amountWei + feeWei
+      
+      // Step 1: Approve tokens
+      setTxStatus('Step 1: Approving RUSD tokens...')
+      
+      writeContract({
+        address: contracts.RUSD as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [contracts.ROUTER, totalCost],
+        chainId,
+      })
+      
+      setTxStatus('Approval transaction submitted - waiting for confirmation...')
+
     } catch (error) {
-      console.error('❌ Payment failed:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Payment failed'
-      recordTransaction(false, undefined, errorMessage)
+      console.error('Complete payment error:', error)
+      setTxStatus('Payment failed')
+      setIsConfirming(false)
+      setCurrentStep('failed')
+      await recordPaymentAttempt(currentPaymentId, address, chainId || 0, false, undefined, 'Payment failed')
     }
   }
 
-  if (loading) {
+  // Reset validation when paymentId changes
+  useEffect(() => {
+    setHasValidated(false)
+    setPaymentData(null)
+    setValidationError('')
+  }, [currentPaymentId])
+
+  // Auto-validate when paymentId and address are available (only once)
+  useEffect(() => {
+    if (currentPaymentId && address && !hasValidated) {
+      validatePaymentLink()
+    }
+  }, [currentPaymentId, address, hasValidated])
+
+  if (!isConnected) {
     return (
-      <div className="page-container">
-        <div className="loading-container">
-          <div className="spinner mb-4" />
-          <p className="loading-text">Loading payment details...</p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircleIcon className="w-8 h-8 text-gray-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">Connect Your Wallet</h1>
+          <p className="text-gray-600 text-lg">Connect your wallet to process this payment link.</p>
         </div>
       </div>
     )
   }
 
-  if (error || !paymentData) {
+  if (!currentPaymentId) {
     return (
-      <div className="page-container">
-        <div className="error-container">
-          <XCircleIcon className="w-16 h-16 mx-auto mb-4 text-red-500" />
-          <h2 className="error-title">Payment Not Found</h2>
-          <p className="error-message">{error || 'The payment link is invalid or has expired.'}</p>
-          <Button
-            onClick={() => window.location.href = '/'}
-            className="mt-4"
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <h1 className="text-3xl font-bold text-black mb-4">Process Payment</h1>
+          <p className="text-gray-600 text-lg mb-8">Enter a payment ID to process a payment, or use a payment link.</p>
+          <div className="space-y-4">
+            <input
+              type="text"
+              placeholder="Enter payment ID"
+              value={manualPaymentId}
+              onChange={(e) => setManualPaymentId(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            />
+            <Button 
+              onClick={validatePaymentLink}
+              disabled={!manualPaymentId || !address}
+              className="w-full bg-black text-white hover:bg-gray-800"
+            >
+              Validate Payment
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isValidating) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ArrowPathIcon className="w-8 h-8 text-gray-400 animate-spin" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">Validating Payment Link...</h1>
+          <p className="text-gray-600 text-lg">Please wait while we validate your payment link.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (validationError) {
+    const isRecipientError = validationError.includes('not the authorized recipient')
+    
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">❌ Payment Access Denied</h1>
+          {isRecipientError ? (
+            <>
+              <p className="text-gray-600 text-lg mb-4">🔒 <strong>Security Error:</strong> You are not the authorized recipient for this payment.</p>
+              <p className="text-gray-600 mb-6">Only the intended recipient wallet can process this payment link.</p>
+              <div className="bg-gray-100 p-4 rounded-lg mb-6">
+                <p className="text-sm text-gray-700"><strong>Your wallet:</strong> {address}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-600 text-lg mb-4">{validationError}</p>
+              <p className="text-gray-600 mb-6">Please check that the payment link is valid and not expired.</p>
+            </>
+          )}
+          <Button 
+            onClick={() => window.location.href = '/'} 
+            className="bg-black text-white hover:bg-gray-800"
           >
-            Go Home
+            Go Back to Home
           </Button>
         </div>
       </div>
     )
   }
 
-  if (!isConnected) {
+  if (!paymentData) {
     return (
-      <div className="page-container">
-        <div className="page-header">
-          <h1 className="page-title">Process Payment</h1>
-          <p className="page-subtitle">Connect your wallet to complete this payment</p>
-        </div>
-        
-        <div className="card max-w-md mx-auto text-center">
-          <WalletIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-gray-600 mb-6">Please connect your wallet to complete this payment.</p>
-          <Button size="lg" className="w-full">
-            <WalletIcon className="w-5 h-5 mr-2" />
-            Connect Wallet
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircleIcon className="w-8 h-8 text-gray-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">Payment Link Not Found</h1>
+          <p className="text-gray-600 text-lg mb-6">No payment data available. Please check the payment link.</p>
+          <Button 
+            onClick={() => window.location.href = '/'} 
+            className="bg-black text-white hover:bg-gray-800"
+          >
+            Go Back to Home
           </Button>
         </div>
       </div>
@@ -327,219 +424,124 @@ export default function ProcessPayment() {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Process Payment</h1>
-        <p className="page-subtitle">Complete your cross-chain RUSD payment</p>
-      </div>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-black mb-4">Pay Request</h1>
+          <p className="text-gray-600 text-lg">Complete this cross-chain RUSD payment request</p>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Faucet Section */}
+        <div className="bg-gray-100 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold text-black mb-4">Get Test Tokens</h3>
+          <FaucetButton chainId={chainId || 0} address={address} />
+        </div>
+
         {/* Payment Details */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title flex items-center">
-              <CurrencyDollarIcon className="w-6 h-6 mr-2" />
-              Payment Details
-            </h2>
-            <p className="card-subtitle">Review the payment information</p>
+        <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
+          <h3 className="text-2xl font-bold text-black mb-6">Payment Request Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Amount to Pay:</span>
+                <span className="font-bold text-black">{formatEther(BigInt(paymentData.amount))} RUSD</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Solver Fee:</span>
+                <span className="font-bold text-black">{formatEther(BigInt(paymentData.solverFee))} RUSD</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Pay To (Creator):</span>
+                <span className="font-mono text-sm text-black">{paymentData.creatorAddress}</span>
+              </div>
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-600 font-medium">Your Address (Sender):</span>
+                <span className="font-mono text-sm text-black">{address}</span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">From Chain (Your Current):</span>
+                <span className="font-semibold text-black">{paymentData.sourceChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">To Chain (Recipient's):</span>
+                <span className="font-semibold text-black">{paymentData.destinationChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+              </div>
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-600 font-medium">Expires:</span>
+                <span className="text-black">{new Date(paymentData.expiresAt).toLocaleString()}</span>
+              </div>
+            </div>
           </div>
+        </div>
 
+        {/* Action Buttons */}
+        <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
+          <h3 className="text-2xl font-bold text-black mb-6">Complete Payment</h3>
           <div className="space-y-6">
-            {/* Payment Info */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-600">Payment ID</span>
-                <span className="font-mono text-sm">{paymentId}</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-600">Amount</span>
-                <span className="font-semibold font-mono">{formatEther(paymentData.amount)} RUSD</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-600">From</span>
-                <span className="font-semibold">{getChainName(paymentData.sourceChainId)}</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-600">To</span>
-                <span className="font-semibold">{getChainName(paymentData.destinationChainId)}</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-gray-600">Creator</span>
-                <span className="font-mono text-sm">
-                  {paymentData.creatorAddress?.slice(0, 6)}...{paymentData.creatorAddress?.slice(-4)}
-                </span>
-              </div>
-            </div>
-
-            {/* Solver Fee */}
-            <div className="form-group">
-              <label className="form-label">Solver Fee (ETH)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={solverFee}
-                  onChange={(e) => setSolverFee(e.target.value)}
-                  placeholder="0.01"
-                  className="form-input pr-12"
-                  step="0.001"
-                  min="0"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <span className="text-sm font-mono text-gray-500">ETH</span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">Fee paid to solver for executing the cross-chain transfer</p>
-            </div>
-
-            {/* Process Button */}
-            <Button
+            <Button 
+              className={`w-full py-4 text-lg font-bold ${
+                currentStep === 'completed' 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  : 'bg-black text-white hover:bg-gray-800'
+              }`}
               onClick={handleCompletePayment}
-              disabled={!solverFee || isPending || currentStep !== 'idle'}
-              size="lg"
-              className="w-full"
+              disabled={isWritePending || isConfirming}
             >
-              {isPending ? (
-                <>
-                  <div className="spinner mr-2" />
-                  {currentStep === 'approving' ? 'Approving...' : 'Processing...'}
-                </>
-              ) : (
-                <>
-                  <ArrowPathIcon className="w-5 h-5 mr-2" />
-                  Process Payment
-                </>
-              )}
+              {currentStep === 'approving' ? '⏳ Approving...' : 
+               currentStep === 'swapping' ? '🔄 Swapping...' : 
+               currentStep === 'completed' ? '✅ Payment Completed!' :
+               currentStep === 'failed' ? '❌ Payment Failed' :
+               isWritePending ? 'Processing...' : '💳 Complete Payment'}
             </Button>
-          </div>
-        </div>
-
-        {/* Status & Results */}
-        <div className="space-y-6">
-          {/* Current Chain Info */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <CubeIcon className="w-5 h-5 mr-2" />
-                Current Network
-              </h3>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${getChainColor(chainId)}`}></div>
-                <span className="font-semibold">{getChainName(chainId)}</span>
-              </div>
-              <span className="text-sm font-mono text-gray-600">Chain ID: {chainId}</span>
-            </div>
-          </div>
-
-          {/* Transaction Status */}
-          {(currentStep !== 'idle' || isSuccess || isTxError) && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title flex items-center">
-                  <ClockIcon className="w-5 h-5 mr-2" />
-                  Transaction Status
-                </h3>
-              </div>
-              <div className="space-y-4">
-                {currentStep === 'approving' && (
-                  <div className="flex items-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-yellow-800">Approving RUSD</p>
-                      <p className="text-sm text-yellow-600">Please confirm the approval transaction in your wallet</p>
-                    </div>
-                  </div>
-                )}
-
-                {currentStep === 'swapping' && (
-                  <div className="flex items-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-blue-800">Processing Payment</p>
-                      <p className="text-sm text-blue-600">Cross-chain payment in progress...</p>
-                    </div>
-                  </div>
-                )}
-
-                {isSuccess && (
-                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckCircleIcon className="w-6 h-6 mr-3 text-green-600" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-green-800">Payment Successful!</p>
-                      <p className="text-sm text-green-600">Your payment has been processed successfully</p>
-                      {hash && (
-                        <a
-                          href={`https://${chainId === 84532 ? 'sepolia.basescan.org' : 'testnet.snowtrace.io'}/tx/${hash.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center mt-2 text-sm text-green-700 hover:text-green-800"
-                        >
-                          View Transaction
-                          <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {isTxError && (
-                  <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <XCircleIcon className="w-6 h-6 mr-3 text-red-600" />
-                    <div>
-                      <p className="font-semibold text-red-800">Payment Failed</p>
-                      <p className="text-sm text-red-600">Transaction was not successful</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Recording Status */}
-                {isRecordingTransaction && (
-                  <div className="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="spinner mr-3" />
-                    <div>
-                      <p className="font-semibold text-gray-800">Recording Transaction</p>
-                      <p className="text-sm text-gray-600">Saving transaction details...</p>
-                    </div>
-                  </div>
-                )}
-
-                {transactionRecorded && (
-                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckBadgeIcon className="w-6 h-6 mr-3 text-green-600" />
-                    <div>
-                      <p className="font-semibold text-green-800">Transaction Recorded</p>
-                      <p className="text-sm text-green-600">Transaction details saved successfully</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Faucet Section */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <BeakerIcon className="w-5 h-5 mr-2" />
-                Testnet Faucet
-              </h3>
-              <p className="card-subtitle">Get test RUSD tokens for testing</p>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start">
-                  <ExclamationTriangleIcon className="w-5 h-5 mr-2 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-yellow-800 font-semibold">Testnet Only</p>
-                    <p className="text-sm text-yellow-700">This faucet provides test RUSD tokens with no real value</p>
-                  </div>
-                </div>
-              </div>
-              <FaucetButton chainId={chainId} />
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-700">
+                This will open MetaMask with TWO popups sequentially:<br/>
+                1️⃣ First popup: Approve RUSD tokens (required for swap)<br/>
+                2️⃣ Second popup: Execute cross-chain swap (opens after approval)<br/>
+                <strong>Both must be approved for payment to complete!</strong>
+              </p>
             </div>
           </div>
         </div>
+
+        {/* Transaction Status */}
+        {txStatus && (
+          <div className="bg-gray-100 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-black mb-4">Status</h3>
+            <div className="flex items-center space-x-3">
+              {currentStep === 'completed' ? (
+                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+              ) : currentStep === 'failed' ? (
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+              ) : (
+                <ArrowPathIcon className="w-6 h-6 text-blue-600 animate-spin" />
+              )}
+              <p className={`text-lg ${
+                txStatus.includes('success') || currentStep === 'completed' ? 'text-green-600' : 
+                currentStep === 'failed' ? 'text-red-600' : 'text-blue-600'
+              }`}>
+                {txStatus}
+              </p>
+            </div>
+            {hash && (
+              <div className="mt-4 p-4 bg-white rounded-lg border">
+                <p className="text-sm text-gray-600 mb-2">Transaction Hash:</p>
+                <p className="font-mono text-sm break-all">{hash.transactionHash}</p>
+                <a
+                  href={`https://${chainId === 84532 ? 'sepolia.basescan.org' : 'testnet.snowtrace.io'}/tx/${hash.transactionHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
+                >
+                  View Transaction →
+                </a>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -4,20 +4,9 @@ import { parseEther } from 'viem'
 import QRCode from 'qrcode'
 import { Button } from '@/components/ui/button'
 import {
-  QrCodeIcon,
-  LinkIcon,
-  ClipboardDocumentIcon,
+  XCircleIcon,
   ArrowDownTrayIcon,
-  WalletIcon,
-  CubeIcon,
-  CurrencyDollarIcon,
-  ClockIcon,
-  BeakerIcon,
-  ExclamationTriangleIcon,
   CheckCircleIcon,
-  ArrowTopRightOnSquareIcon,
-  ShareIcon,
-  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline'
 
 const API_BASE_URL = 'http://localhost:3001/api/payment'
@@ -55,16 +44,9 @@ function FaucetButton({ chainId }: { chainId: number }) {
     <Button
       onClick={handleFaucet}
       disabled={isPending}
-      variant="outline"
-      size="sm"
-      className="w-full"
+      className="bg-gray-800 text-white hover:bg-gray-700"
     >
-      {isPending ? (
-        <div className="spinner mr-2" />
-      ) : (
-        <BeakerIcon className="w-4 h-4 mr-2" />
-      )}
-      Get 1000 RUSD
+      {isPending ? 'Requesting...' : 'Get 1000 RUSD'}
     </Button>
   )
 }
@@ -73,408 +55,314 @@ export default function CreatePayment() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
 
+  // State
+  const [senderAddress, setSenderAddress] = useState('')
   const [amount, setAmount] = useState('')
-  const [destinationChainId, setDestinationChainId] = useState(43113)
-  const [paymentMode, setPaymentMode] = useState<'qr' | 'link'>('qr')
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
+  const [solverFee, setSolverFee] = useState('0.01')
+  const [destinationChainId, setDestinationChainId] = useState(43113) // Default to Avalanche Fuji
+  const [expiresInHours, setExpiresInHours] = useState(24)
+  const [isCreating, setIsCreating] = useState(false)
   const [paymentLink, setPaymentLink] = useState('')
-  const [paymentId, setPaymentId] = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  
+  // Toast state
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null)
 
-  const getChainName = (chainId: number) => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    setToast({ message, type })
+  }
+
+  const closeToast = () => {
+    setToast(null)
+  }
+
+  // Get current chain name
+  const getCurrentChainName = (chainId: number) => {
     switch (chainId) {
       case 84532: return 'Base Sepolia'
       case 43113: return 'Avalanche Fuji'
-      default: return `Chain ${chainId}`
+      default: return `Unknown (${chainId})`
     }
   }
 
-  const getChainColor = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'bg-blue-500'
-      case 43113: return 'bg-red-500'
-      default: return 'bg-gray-500'
+  const createPayment = async () => {
+    if (!isConnected || !address) {
+      setError('Please connect your wallet first')
+      return
     }
-  }
 
-  const generateQRCode = async (data: string) => {
-    try {
-      const qrDataUrl = await QRCode.toDataURL(data, {
-        width: 300,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      })
-      setQrCodeDataUrl(qrDataUrl)
-    } catch (error) {
-      console.error('QR Code generation failed:', error)
+    if (!senderAddress || !amount) {
+      setError('Please fill in all required fields')
+      return
     }
-  }
 
-  const createPaymentLink = async () => {
-    if (!amount || !address) return
-
-    setIsGenerating(true)
+    setIsCreating(true)
     setError('')
-    setSuccess(false)
 
     try {
-      const paymentData = {
-        amount: parseEther(amount).toString(),
-        sourceChainId: chainId,
-        destinationChainId,
-        creatorAddress: address,
-        mode: paymentMode
-      }
-
       const response = await fetch(`${API_BASE_URL}/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(paymentData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorAddress: address, // Creator (who creates the payment request and will receive money)
+          recipientAddress: senderAddress, // Recipient (who will pay the money)
+          amount: parseEther(amount).toString(),
+          solverFee: parseEther(solverFee).toString(),
+          sourceChainId: chainId, // Use current chain as source
+          destinationChainId, // Where creator wants to receive money
+          expiresInHours
+        })
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to create payment link')
-      }
-
       const result = await response.json()
-      setPaymentId(result.paymentId)
-      setPaymentLink(`${window.location.origin}/payment/${result.paymentId}`)
-      setSuccess(true)
 
-      if (paymentMode === 'qr') {
-        await generateQRCode(`${window.location.origin}/payment/${result.paymentId}`)
+      if (result.success) {
+        const fullPaymentLink = `${window.location.origin}/payment/${result.data.paymentId}`
+        setPaymentLink(fullPaymentLink)
+        const qr = await QRCode.toDataURL(fullPaymentLink)
+        setQrCodeUrl(qr)
+        showToast('Payment link created successfully!', 'success')
+        console.log('✅ Payment link created:', fullPaymentLink)
+      } else {
+        setError(result.error || 'Failed to create payment link')
+        showToast(result.error || 'Failed to create payment link', 'error')
+        console.error('❌ Failed to create payment link:', result.error)
       }
-    } catch (error) {
-      console.error('Payment creation failed:', error)
-      setError(error instanceof Error ? error.message : 'Failed to create payment')
+    } catch (err) {
+      setError('An unexpected error occurred.')
+      showToast('An unexpected error occurred.', 'error')
+      console.error('❌ Error creating payment link:', err)
     } finally {
-      setIsGenerating(false)
+      setIsCreating(false)
     }
   }
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error)
-    }
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    showToast('Copied to clipboard!', 'success')
   }
 
   const downloadQRCode = () => {
-    if (!qrCodeDataUrl) return
-
-    const link = document.createElement('a')
-    link.download = `payment-qr-${paymentId}.png`
-    link.href = qrCodeDataUrl
-    link.click()
+    if (qrCodeUrl) {
+      const link = document.createElement('a')
+      link.download = 'payment-qr-code.png'
+      link.href = qrCodeUrl
+      link.click()
+    }
   }
 
   if (!isConnected) {
     return (
-      <div className="page-container">
-        <div className="page-header">
-          <h1 className="page-title">Create Payment</h1>
-          <p className="page-subtitle">Connect your wallet to create payment links and QR codes</p>
-        </div>
-        
-        <div className="card max-w-md mx-auto text-center">
-          <WalletIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-gray-600 mb-6">Please connect your wallet to access the payment creation functionality.</p>
-          <Button size="lg" className="w-full">
-            <WalletIcon className="w-5 h-5 mr-2" />
-            Connect Wallet
-          </Button>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <XCircleIcon className="w-8 h-8 text-gray-400" />
+          </div>
+          <h1 className="text-3xl font-bold text-black mb-4">Connect Your Wallet</h1>
+          <p className="text-gray-600 text-lg">Please connect your wallet to create payment links.</p>
         </div>
       </div>
     )
   }
 
+  const currentChainName = getCurrentChainName(chainId)
+  const destinationChainName = getCurrentChainName(destinationChainId)
+
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Create Payment</h1>
-        <p className="page-subtitle">Generate QR codes and payment links for cross-chain RUSD payments</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Payment Configuration */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title flex items-center">
-              <CurrencyDollarIcon className="w-6 h-6 mr-2" />
-              Payment Configuration
-            </h2>
-            <p className="card-subtitle">Configure your payment parameters</p>
+    <div className="min-h-screen bg-white">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+          toast.type === 'success' ? 'bg-green-500 text-white' :
+          toast.type === 'error' ? 'bg-red-500 text-white' :
+          'bg-blue-500 text-white'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{toast.message}</span>
+            <button onClick={closeToast} className="ml-4 text-white hover:text-gray-200">
+              <XCircleIcon className="w-4 h-4" />
+            </button>
           </div>
+        </div>
+      )}
+      
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-black mb-4">Create Payment</h1>
+          <p className="text-gray-600 text-lg">
+            Create a payment request with QR code and shareable link
+          </p>
+        </div>
 
+        {/* Network Info */}
+        <div className="bg-gray-100 rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-black">Current Network</h3>
+              <p className="text-gray-600">{currentChainName} (Chain ID: {chainId})</p>
+            </div>
+            <FaucetButton chainId={chainId || 84532} />
+          </div>
+        </div>
+
+        {/* Create Payment Form */}
+        <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
+          <h2 className="text-2xl font-bold text-black mb-6">Payment Request Details</h2>
+          
           <div className="space-y-6">
-            {/* Amount Input */}
-            <div className="form-group">
-              <label className="form-label">Amount (RUSD)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.0"
-                  className="form-input pr-12"
-                  step="0.01"
-                  min="0"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <span className="text-sm font-mono text-gray-500">RUSD</span>
-                </div>
-              </div>
+            <div>
+              <label htmlFor="senderAddress" className="block text-sm font-medium text-gray-700 mb-2">Sender Address (who will pay you)</label>
+              <input
+                type="text"
+                id="senderAddress"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={senderAddress}
+                onChange={(e) => setSenderAddress(e.target.value)}
+                placeholder="0x..."
+              />
             </div>
 
-            {/* Destination Chain */}
-            <div className="form-group">
-              <label className="form-label">Destination Chain</label>
+            <div>
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">Amount (RUSD)</label>
+              <input
+                type="number"
+                id="amount"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="solverFee" className="block text-sm font-medium text-gray-700 mb-2">Solver Fee (RUSD)</label>
+              <input
+                type="number"
+                id="solverFee"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={solverFee}
+                onChange={(e) => setSolverFee(e.target.value)}
+                placeholder="0.01"
+                min="0"
+                step="0.001"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="destinationChain" className="block text-sm font-medium text-gray-700 mb-2">Destination Chain (where you receive RUSD)</label>
               <select
+                id="destinationChain"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
                 value={destinationChainId}
                 onChange={(e) => setDestinationChainId(Number(e.target.value))}
-                className="form-select"
               >
-                <option value={43113}>Avalanche Fuji</option>
                 <option value={84532}>Base Sepolia</option>
+                <option value={43113}>Avalanche Fuji</option>
               </select>
             </div>
 
-            {/* Payment Mode */}
-            <div className="form-group">
-              <label className="form-label">Payment Mode</label>
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setPaymentMode('qr')}
-                  className={`flex-1 p-3 border-2 rounded-lg text-center transition-all ${
-                    paymentMode === 'qr'
-                      ? 'border-black bg-black text-white'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  <QrCodeIcon className="w-6 h-6 mx-auto mb-2" />
-                  <span className="font-semibold">QR Code</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMode('link')}
-                  className={`flex-1 p-3 border-2 rounded-lg text-center transition-all ${
-                    paymentMode === 'link'
-                      ? 'border-black bg-black text-white'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  <LinkIcon className="w-6 h-6 mx-auto mb-2" />
-                  <span className="font-semibold">Payment Link</span>
-                </button>
+            <div>
+              <label htmlFor="expiresInHours" className="block text-sm font-medium text-gray-700 mb-2">Expires In (Hours)</label>
+              <input
+                type="number"
+                id="expiresInHours"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+                value={expiresInHours}
+                onChange={(e) => setExpiresInHours(Number(e.target.value))}
+                min="1"
+                step="1"
+              />
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600">Your current chain:</span>
+                <span className="font-semibold text-black">{currentChainName}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm mt-1">
+                <span className="text-gray-600">You will receive RUSD on:</span>
+                <span className="font-semibold text-black">{destinationChainName}</span>
               </div>
             </div>
 
-            {/* Generate Button */}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
+
             <Button
-              onClick={createPaymentLink}
-              disabled={!amount || isGenerating}
-              size="lg"
-              className="w-full"
+              onClick={createPayment}
+              disabled={isCreating || !senderAddress || !amount}
+              className="w-full py-4 text-lg font-bold bg-black text-white hover:bg-gray-800"
             >
-              {isGenerating ? (
-                <>
-                  <div className="spinner mr-2" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <ShareIcon className="w-5 h-5 mr-2" />
-                  Generate Payment
-                </>
-              )}
+              {isCreating ? 'Creating...' : 'Create Payment Link'}
             </Button>
           </div>
         </div>
 
-        {/* Payment Details & Results */}
-        <div className="space-y-6">
-          {/* Current Chain Info */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <CubeIcon className="w-5 h-5 mr-2" />
-                Current Network
-              </h3>
+        {/* Payment Link Created */}
+        {paymentLink && (
+          <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
+            <div className="flex items-center space-x-3 mb-6">
+              <CheckCircleIcon className="w-8 h-8 text-green-600" />
+              <h3 className="text-2xl font-bold text-black">Payment Link Created!</h3>
             </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${getChainColor(chainId)}`}></div>
-                <span className="font-semibold">{getChainName(chainId)}</span>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Link</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={paymentLink}
+                    className="flex-grow px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-50"
+                  />
+                  <Button
+                    onClick={() => copyToClipboard(paymentLink)}
+                    className="bg-gray-800 text-white hover:bg-gray-700"
+                  >
+                    Copy
+                  </Button>
+                </div>
               </div>
-              <span className="text-sm font-mono text-gray-600">Chain ID: {chainId}</span>
+
+              {qrCodeUrl && (
+                <div className="text-center">
+                  <div className="inline-block p-4 bg-white border-2 border-gray-300 rounded-lg">
+                    <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">Scan to pay</p>
+                  <Button
+                    onClick={downloadQRCode}
+                    className="mt-4 bg-gray-800 text-white hover:bg-gray-700"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                    Download QR Code
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
+        )}
 
-          {/* Payment Summary */}
-          {amount && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title flex items-center">
-                  <ClockIcon className="w-5 h-5 mr-2" />
-                  Payment Summary
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">From</span>
-                  <span className="font-semibold">{getChainName(chainId)}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">To</span>
-                  <span className="font-semibold">{getChainName(destinationChainId)}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-600">Amount</span>
-                  <span className="font-semibold font-mono">{amount} RUSD</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600">Mode</span>
-                  <span className="font-semibold capitalize">{paymentMode}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Success State */}
-          {success && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title flex items-center text-green-800">
-                  <CheckCircleIcon className="w-6 h-6 mr-2" />
-                  Payment Created Successfully
-                </h3>
-              </div>
-              <div className="space-y-4">
-                {paymentMode === 'qr' && qrCodeDataUrl && (
-                  <div className="text-center">
-                    <div className="inline-block p-4 bg-white border-2 border-gray-200 rounded-lg">
-                      <img src={qrCodeDataUrl} alt="Payment QR Code" className="w-64 h-64" />
-                    </div>
-                    <div className="mt-4 space-x-2">
-                      <Button
-                        onClick={downloadQRCode}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                        Download QR
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {paymentLink && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="form-label">Payment Link</label>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={paymentLink}
-                          readOnly
-                          className="form-input flex-1"
-                        />
-                        <Button
-                          onClick={() => copyToClipboard(paymentLink)}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <DocumentDuplicateIcon className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-semibold mb-2">Payment Details</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Payment ID:</span>
-                          <span className="font-mono">{paymentId}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Amount:</span>
-                          <span className="font-mono">{amount} RUSD</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Destination:</span>
-                          <span className="font-mono">{getChainName(destinationChainId)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <Button
-                        onClick={() => window.open(paymentLink, '_blank')}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                      >
-                        <ArrowTopRightOnSquareIcon className="w-4 h-4 mr-2" />
-                        Open Payment
-                      </Button>
-                      <Button
-                        onClick={() => copyToClipboard(paymentLink)}
-                        size="sm"
-                        className="flex-1"
-                      >
-                        <ClipboardDocumentIcon className="w-4 h-4 mr-2" />
-                        Copy Link
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <div className="card border-red-200 bg-red-50">
-              <div className="flex items-center p-4">
-                <ExclamationTriangleIcon className="w-6 h-6 mr-3 text-red-600" />
-                <div>
-                  <h3 className="font-semibold text-red-800">Error</h3>
-                  <p className="text-sm text-red-600">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Faucet Section */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title flex items-center">
-                <BeakerIcon className="w-5 h-5 mr-2" />
-                Testnet Faucet
-              </h3>
-              <p className="card-subtitle">Get test RUSD tokens for testing</p>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start">
-                  <ExclamationTriangleIcon className="w-5 h-5 mr-2 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-yellow-800 font-semibold">Testnet Only</p>
-                    <p className="text-sm text-yellow-700">This faucet provides test RUSD tokens with no real value</p>
-                  </div>
-                </div>
-              </div>
-              <FaucetButton chainId={chainId} />
-            </div>
-          </div>
+        {/* Instructions */}
+        <div className="bg-blue-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-black mb-4">How it works</h3>
+          <ol className="list-decimal list-inside space-y-2 text-gray-700">
+            <li>Enter the sender's wallet address (who will pay you)</li>
+            <li>Enter the amount of RUSD you want to receive</li>
+            <li>Set the solver fee (paid in RUSD) for cross-chain execution</li>
+            <li>Select the destination chain where you want to receive the tokens</li>
+            <li>Set expiration time for the payment request</li>
+            <li>Click "Create Payment" to generate a payment link and QR code</li>
+            <li>Share the link or QR code with the sender to receive payment</li>
+          </ol>
         </div>
       </div>
     </div>
