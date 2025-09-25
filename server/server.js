@@ -24,7 +24,14 @@ testConnection();
 
 // Middleware
 app.use(cors(
-  { origin: '*' }
+  {
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:3001',
+      'https://cross-pay-onlyswaps.vercel.app',
+    ]
+  }
 ));
 app.use(express.json());
 
