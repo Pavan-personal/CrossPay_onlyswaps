@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3001'
+const API_BASE_URL = `${(import.meta as any).env.VITE_API_BASE_URL}`
 
 export interface SendTransactionData {
   walletAddress: string
@@ -52,7 +52,7 @@ export interface PaymentLinksResponse {
 // Record Send Transaction
 export async function recordSendTransaction(transactionData: SendTransactionData): Promise<TransactionResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/transaction`, {
+    const response = await fetch(`${API_BASE_URL}/transaction`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ export async function recordSendTransaction(transactionData: SendTransactionData
 // Record Swap Transaction
 export async function recordSwapTransaction(transactionData: SwapTransactionData): Promise<TransactionResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/transaction`, {
+    const response = await fetch(`${API_BASE_URL}/transaction`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ export async function getTransactionsByWallet(
       ...(options.offset && { offset: options.offset.toString() })
     })
 
-    const response = await fetch(`${API_BASE_URL}/api/transaction/wallet/${walletAddress}?${params}`, {
+    const response = await fetch(`${API_BASE_URL}/transaction/wallet/${walletAddress}?${params}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -181,7 +181,7 @@ export async function getPaymentLinksByCreator(
       ...(options.offset && { offset: options.offset.toString() })
     })
 
-    const response = await fetch(`${API_BASE_URL}/api/payment/creator/${creatorAddress}?${params}`, {
+    const response = await fetch(`${API_BASE_URL}/payment/creator/${creatorAddress}?${params}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -215,7 +215,7 @@ export async function createPaymentLink(paymentData: {
   expiresInHours: number
 }): Promise<TransactionResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/payment/create`, {
+    const response = await fetch(`${API_BASE_URL}/payment/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -242,7 +242,7 @@ export async function createPaymentLink(paymentData: {
 // Get Payment Details
 export async function getPaymentDetails(paymentId: string): Promise<TransactionResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/payment/${paymentId}`, {
+    const response = await fetch(`${API_BASE_URL}/payment/${paymentId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -275,7 +275,7 @@ export async function recordPaymentAttempt(attemptData: {
   errorMessage?: string
 }): Promise<TransactionResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/payment/attempt`, {
+    const response = await fetch(`${API_BASE_URL}/payment/attempt`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

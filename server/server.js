@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3000;
 
 // Database connection - Simple approach like MindMesh
 const prisma = new PrismaClient();
@@ -43,7 +43,7 @@ const validatePaymentSchema = Joi.object({
 });
 
 // Routes
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     message: 'Payment Backend API is running',
@@ -84,7 +84,7 @@ app.post('/api/payment/create', async (req, res) => {
       success: true,
       data: {
         paymentId: payment.paymentId,
-        paymentLink: `http://localhost:3000/payment/${payment.paymentId}`,
+        paymentLink: `${process.env.FRONTEND_URL}/payment/${payment.paymentId}`,
         expiresAt: payment.expiresAt,
         status: payment.status
       }
@@ -513,7 +513,7 @@ app.get('/api/payment/creator/:address', async (req, res) => {
             paidAt: payment.paidAt,
             transactionHash: payment.transactionHash,
             metadata: payment.metadata,
-            paymentUrl: `${req.protocol}://${req.get('host')}/payment/${payment.paymentId}`,
+            paymentUrl: `${process.env.FRONTEND_URL}/payment/${payment.paymentId}`,
             
             // Attempt details
             attemptCount: payment.paymentAttempts.length,
@@ -580,7 +580,7 @@ app.use('*', (req, res) => {
 // Start server
 const server = app.listen(PORT, () => {
   console.log(`🚀 Payment Backend API running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`💳 Payment API: http://localhost:${PORT}/api/payment`);
 });
 

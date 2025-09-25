@@ -9,7 +9,7 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 
-const API_BASE_URL = 'http://localhost:3001/api/payment'
+const API_BASE_URL = `${(import.meta as any).env.VITE_API_BASE_URL}/payment`
 const RUSD_TOKEN = '0x908e1D85604E0e9e703d52D18f3f3f604Fe7Bb1b'
 
 function FaucetButton({ chainId }: { chainId: number }) {

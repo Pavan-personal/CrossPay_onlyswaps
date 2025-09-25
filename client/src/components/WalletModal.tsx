@@ -87,7 +87,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-4 px-8 space-y-4">
           {/* Wallet Address */}
           <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
             <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">

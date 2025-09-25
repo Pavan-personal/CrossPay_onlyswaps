@@ -78,10 +78,14 @@ onlyswaps-frontend/
 
 3. **Environment Setup**
    ```bash
-   # Create environment file for server
-   cd server
+   # Create environment files
+   cd client
    cp .env.example .env
-   # Edit .env with your configuration
+   # Edit client/.env with your frontend configuration
+   
+   cd ../server
+   cp .env.example .env
+   # Edit server/.env with your backend configuration
    ```
 
 4. **Database Setup**
@@ -100,14 +104,14 @@ onlyswaps-frontend/
    cd server
    npm run dev
    ```
-   Server will run on `http://localhost:3001`
+   Server will run on `http://localhost:3000`
 
 2. **Start the frontend development server**
    ```bash
    cd client
    npm run dev
    ```
-   Frontend will run on `http://localhost:3000`
+   Frontend will run on `http://localhost:5173`
 
 ### Production Build
 
@@ -131,9 +135,21 @@ onlyswaps-frontend/
 - Configure wallet providers in `client/src/main.tsx`
 
 ### Backend Configuration
-- Update `server/config.js` for server settings
+- Update `server/.env` for server settings (PORT, FRONTEND_URL, DATABASE_URL)
 - Modify `server/prisma/schema.prisma` for database schema
 - Configure CORS and other middleware in `server/server.js`
+
+### Environment Variables
+
+**Client (.env):**
+- `VITE_API_BASE_URL`: Backend API URL (default: http://localhost:3001)
+- `VITE_APP_NAME`: Application name (default: CrossPay)
+- `VITE_APP_VERSION`: Application version (default: 1.0.0)
+
+**Server (.env):**
+- `PORT`: Server port (default: 3001)
+- `FRONTEND_URL`: Frontend URL for payment links (default: http://localhost:3000)
+- `DATABASE_URL`: Database connection string (default: file:./prisma/dev.db)
 
 ## 📱 Usage
 

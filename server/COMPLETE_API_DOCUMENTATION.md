@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-http://localhost:3001
+http://localhost:3000
 ```
 
 ---
@@ -137,7 +137,7 @@ GET /api/payment/creator/0xECdcaE213E26397D63837380bA8f40AfCA97Eb99?status=pendi
         "expiresAt": "2025-09-25T18:09:40.004Z",
         "paidAt": "2025-09-24T18:12:17.730Z",
         "transactionHash": "0xb6d091332696f3136ac87b0699b1cb13022020b70394054bd24cfeefdc55805a",
-        "paymentUrl": "http://localhost:3001/payment/6ee424f4-d2c9-40cb-93ed-e173e45a5af9",
+        "paymentUrl": "http://localhost:3000/payment/6ee424f4-d2c9-40cb-93ed-e173e45a5af9",
         "attemptCount": 6,
         "successfulAttempts": 6,
         "failedAttempts": 0,
@@ -527,7 +527,7 @@ npx prisma generate
 
 ### Health Check
 ```bash
-curl http://localhost:3001/health
+curl http://localhost:3000/health
 ```
 
 ---
