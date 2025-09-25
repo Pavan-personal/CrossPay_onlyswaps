@@ -434,44 +434,70 @@ export default function ProcessPayment() {
 
         {/* Faucet Section */}
         <div className="bg-gray-100 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-black mb-4">Get Test Tokens</h3>
-          <FaucetButton chainId={chainId || 0} address={address} />
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-black">Get Test Tokens</h3>
+              <p className="text-gray-600 text-sm">Need RUSD to complete this payment?</p>
+            </div>
+            <FaucetButton chainId={chainId || 0} address={address} />
+          </div>
         </div>
 
         {/* Payment Details */}
         <div className="bg-white border-2 border-black rounded-lg p-8 mb-8">
           <h3 className="text-2xl font-bold text-black mb-6">Payment Request Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                <span className="text-gray-600 font-medium">Amount to Pay:</span>
-                <span className="font-bold text-black">{formatEther(BigInt(paymentData.amount))} RUSD</span>
+          <div className="space-y-6">
+            {/* Amount and Fee Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-medium">Amount to Pay</span>
+                  <span className="text-2xl font-bold text-black">{formatEther(BigInt(paymentData.amount))} RUSD</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                <span className="text-gray-600 font-medium">Solver Fee:</span>
-                <span className="font-bold text-black">{formatEther(BigInt(paymentData.solverFee))} RUSD</span>
-              </div>
-              <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                <span className="text-gray-600 font-medium">Pay To (Creator):</span>
-                <span className="font-mono text-sm text-black">{paymentData.creatorAddress}</span>
-              </div>
-              <div className="flex justify-between items-center py-3">
-                <span className="text-gray-600 font-medium">Your Address (Sender):</span>
-                <span className="font-mono text-sm text-black">{address}</span>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-medium">Solver Fee</span>
+                  <span className="text-2xl font-bold text-black">{formatEther(BigInt(paymentData.solverFee))} RUSD</span>
+                </div>
               </div>
             </div>
+
+            {/* Chain Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-medium">From Chain</span>
+                  <span className="font-semibold text-black">{paymentData.sourceChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-medium">To Chain</span>
+                  <span className="font-semibold text-black">{paymentData.destinationChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Address Information */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                <span className="text-gray-600 font-medium">From Chain (Your Current):</span>
-                <span className="font-semibold text-black">{paymentData.sourceChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-600 font-medium">Pay To (Creator)</span>
+                  <span className="font-mono text-sm text-black text-right">{paymentData.creatorAddress}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-3 border-b border-gray-200">
-                <span className="text-gray-600 font-medium">To Chain (Recipient's):</span>
-                <span className="font-semibold text-black">{paymentData.destinationChainId === 84532 ? 'Base Sepolia' : 'Avalanche Fuji'}</span>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-600 font-medium">Your Address (Sender)</span>
+                  <span className="font-mono text-sm text-black text-right">{address}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-3">
-                <span className="text-gray-600 font-medium">Expires:</span>
-                <span className="text-black">{new Date(paymentData.expiresAt).toLocaleString()}</span>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 font-medium">Expires</span>
+                  <span className="text-black">{new Date(paymentData.expiresAt).toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>

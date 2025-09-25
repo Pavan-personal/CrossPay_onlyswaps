@@ -181,7 +181,7 @@ export default function PaymentLinks() {
     return (
       <div className="page-container">
         <div className="page-header">
-          <h1 className="page-title">Payment Links</h1>
+        <h1 className="text-4xl font-bold text-black mb-4">Payment Links</h1>
           <p className="page-subtitle">Connect your wallet to view your payment links</p>
         </div>
         
@@ -241,7 +241,7 @@ export default function PaymentLinks() {
               onClick={() => setFilter('paid')}
               className={`filter-button ${filter === 'paid' ? 'active' : ''}`}
             >
-              Paid
+              Received
             </button>
           </div>
           

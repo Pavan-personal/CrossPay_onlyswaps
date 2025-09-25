@@ -151,7 +151,7 @@ function App() {
         <footer className="bg-black text-white py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <p className="text-sm">&copy; 2024 CrossPay - Cross-chain RUSD payments</p>
+              <p className="text-sm">&copy; 2025 CrossPay - Cross-chain RUSD payments</p>
             </div>
           </div>
         </footer>
