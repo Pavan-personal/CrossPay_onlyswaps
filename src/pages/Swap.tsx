@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther } from 'viem'
+import { recordSwapTransaction, type SwapTransactionData } from '../utils/transactionRecorder'
 
 // Contract addresses for different chains
 const CONTRACT_ADDRESSES = {
@@ -108,6 +109,10 @@ export default function Swap() {
   const [solverFee, setSolverFee] = useState('0.01')
   const [destinationChainId, setDestinationChainId] = useState(43113) // Default to Avalanche Fuji
   const [txStatus, setTxStatus] = useState('')
+  
+  // Transaction recording state
+  const [isRecordingTransaction, setIsRecordingTransaction] = useState(false)
+  const [transactionRecorded, setTransactionRecorded] = useState(false)
 
   // Get current chain name
   const getCurrentChainName = (chainId: number) => {
@@ -115,6 +120,40 @@ export default function Swap() {
       case 84532: return 'Base Sepolia'
       case 43113: return 'Avalanche Fuji'
       default: return `Unknown (${chainId})`
+    }
+  }
+
+  // Record transaction to backend
+  const recordTransaction = async (success: boolean, transactionHash?: string, errorMessage?: string) => {
+    if (!address || transactionRecorded) return
+
+    setIsRecordingTransaction(true)
+    
+    try {
+      const transactionData: SwapTransactionData = {
+        walletAddress: address,
+        amount: parseEther(amount).toString(),
+        solverFee: parseEther(solverFee).toString(),
+        sourceChainId: chainId || 0,
+        destinationChainId,
+        transactionHash,
+        success,
+        errorMessage
+      }
+
+      console.log('📝 Recording swap transaction:', transactionData)
+      const result = await recordSwapTransaction(transactionData)
+      
+      if (result.success) {
+        console.log('✅ Swap transaction recorded successfully:', result.data)
+        setTransactionRecorded(true)
+      } else {
+        console.error('❌ Failed to record swap transaction:', result.error)
+      }
+    } catch (error) {
+      console.error('❌ Error recording swap transaction:', error)
+    } finally {
+      setIsRecordingTransaction(false)
     }
   }
 
@@ -154,6 +193,10 @@ export default function Swap() {
       setTxStatus('Swap failed')
       setCurrentStep('failed')
       setIsConfirming(false)
+      
+      // Record failed transaction
+      const errorMessage = error instanceof Error ? error.message : 'Swap execution failed'
+      recordTransaction(false, undefined, errorMessage)
     }
   }
 
@@ -198,6 +241,10 @@ export default function Swap() {
       setTxStatus('Swap failed')
       setIsConfirming(false)
       setCurrentStep('failed')
+      
+      // Record failed transaction
+      const errorMessage = error instanceof Error ? error.message : 'Swap failed'
+      recordTransaction(false, undefined, errorMessage)
     }
   }
 
@@ -213,11 +260,14 @@ export default function Swap() {
         setTxStatus('Approval successful! Now executing swap...')
         executeSwap()
       } else if (currentStep === 'swapping') {
-        // Swap succeeded
+        // Swap succeeded - record successful transaction
         setIsConfirming(false)
         setIsConfirmed(true)
         setCurrentStep('completed')
         setTxStatus(`Swap completed successfully! Transaction: ${hash.transactionHash}`)
+        
+        // Record successful transaction
+        recordTransaction(true, hash.transactionHash)
       }
     }
   }, [isTxSuccess, hash, currentStep])
@@ -230,6 +280,9 @@ export default function Swap() {
       setIsConfirmed(false)
       setCurrentStep('failed')
       setTxStatus('Transaction failed')
+      
+      // Record failed transaction
+      recordTransaction(false, undefined, 'Transaction failed')
     }
   }, [isTxError])
 
@@ -341,6 +394,12 @@ export default function Swap() {
                   View Transaction
                 </a>
               </p>
+            )}
+            {isRecordingTransaction && (
+              <p className="info">📝 Recording transaction to database...</p>
+            )}
+            {transactionRecorded && (
+              <p className="success">✅ Transaction recorded successfully</p>
             )}
           </div>
         )}
