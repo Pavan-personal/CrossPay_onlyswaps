@@ -1,5 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount } from 'wagmi'
+import { useState, useRef, useEffect } from 'react'
+import LandingPage from './components/LandingPage'
 import Swap from './pages/Swap.tsx'
 import CreatePayment from './pages/CreatePayment'
 import Send from './pages/Send'
@@ -9,6 +12,54 @@ import PaymentLinks from './pages/PaymentLinks'
 import './App.css'
 
 function App() {
+  const { isConnected } = useAccount()
+  const [showLanding, setShowLanding] = useState(!isConnected)
+  const connectButtonRef = useRef<HTMLDivElement>(null)
+
+  const handleConnectWallet = () => {
+    // Trigger the ConnectButton click programmatically
+    if (connectButtonRef.current) {
+      const button = connectButtonRef.current.querySelector('button')
+      if (button) {
+        button.click()
+      }
+    }
+  }
+
+  const handleStartSwapping = () => {
+    // If wallet is connected, hide landing page to show main app
+    if (isConnected) {
+      setShowLanding(false)
+    } else {
+      // If wallet not connected, trigger wallet connection first
+      handleConnectWallet()
+    }
+  }
+
+  // Hide landing page when wallet gets connected
+  useEffect(() => {
+    if (isConnected) {
+      setShowLanding(false)
+    }
+  }, [isConnected])
+
+  // Show landing page if wallet is not connected
+  if (showLanding && !isConnected) {
+    return (
+      <div className="App">
+        <LandingPage 
+          onConnectWallet={handleConnectWallet} 
+          isWalletConnected={isConnected} 
+          onStartSwapping={handleStartSwapping}
+        />
+        {/* Hidden ConnectButton that we can trigger programmatically */}
+        <div ref={connectButtonRef} className="hidden">
+          <ConnectButton />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Router>
       <div className="App">

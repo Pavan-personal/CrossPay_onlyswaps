@@ -2,6 +2,21 @@ import { useState, useEffect } from 'react'
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther } from 'viem'
 import { recordSwapTransaction, type SwapTransactionData } from '../utils/transactionRecorder'
+import { Button } from '@/components/ui/button'
+import {
+  ArrowPathIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  WalletIcon,
+  CubeIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  ArrowsUpDownIcon,
+  BeakerIcon,
+  CheckBadgeIcon,
+  XCircleIcon,
+  ArrowTopRightOnSquareIcon,
+} from '@heroicons/react/24/outline'
 
 // Contract addresses for different chains
 const CONTRACT_ADDRESSES = {
@@ -50,29 +65,14 @@ function FaucetButton({ chainId }: { chainId: number }) {
   const { writeContract, isPending } = useWriteContract()
 
   const handleFaucet = async () => {
-    if (!chainId || !address) return
-
-    const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
-    if (!contracts) {
-      alert(`Unsupported chain: ${chainId}`)
-      return
-    }
+    if (!address) return
 
     try {
-      writeContract({
-        address: contracts.RUSD as `0x${string}`,
-        abi: [
-          {
-            "inputs": [{"name": "to", "type": "address"}, {"name": "amount", "type": "uint256"}],
-            "name": "mint",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          }
-        ],
-        functionName: 'mint',
-        args: [address as `0x${string}`, parseEther('1000')],
-        chainId,
+      await writeContract({
+        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [address, parseEther('1000')]
       })
     } catch (error) {
       console.error('Faucet error:', error)
@@ -80,48 +80,37 @@ function FaucetButton({ chainId }: { chainId: number }) {
   }
 
   return (
-    <button 
-      className="faucet-button"
+    <Button
       onClick={handleFaucet}
       disabled={isPending}
+      variant="outline"
+      size="sm"
+      className="w-full"
     >
-      {isPending ? 'Requesting...' : 'Get 1000 RUSD'}
-    </button>
+      {isPending ? (
+        <div className="spinner mr-2" />
+      ) : (
+        <BeakerIcon className="w-4 h-4 mr-2" />
+      )}
+      Get Test RUSD
+    </Button>
   )
 }
 
 export default function Swap() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
-  const { writeContract, isPending: isWritePending, data: txHash } = useWriteContract()
-  
-  // Sequential transaction tracking
-  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'completed' | 'failed'>('idle')
-  const [isConfirming, setIsConfirming] = useState(false)
-  const [, setIsConfirmed] = useState(false)
-  
-  const { data: hash, isSuccess: isTxSuccess, isError: isTxError } = useWaitForTransactionReceipt({
+  const { writeContract, isPending, data: txHash } = useWriteContract()
+  const { data: hash, isSuccess, isError: isTxError } = useWaitForTransactionReceipt({
     hash: txHash,
   })
 
-  // State
   const [amount, setAmount] = useState('')
   const [solverFee, setSolverFee] = useState('0.01')
-  const [destinationChainId, setDestinationChainId] = useState(43113) // Default to Avalanche Fuji
-  const [txStatus, setTxStatus] = useState('')
-  
-  // Transaction recording state
+  const [destinationChainId, setDestinationChainId] = useState(43113)
+  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping'>('idle')
   const [isRecordingTransaction, setIsRecordingTransaction] = useState(false)
   const [transactionRecorded, setTransactionRecorded] = useState(false)
-
-  // Get current chain name
-  const getCurrentChainName = (chainId: number) => {
-    switch (chainId) {
-      case 84532: return 'Base Sepolia'
-      case 43113: return 'Avalanche Fuji'
-      default: return `Unknown (${chainId})`
-    }
-  }
 
   // Record transaction to backend
   const recordTransaction = async (success: boolean, transactionHash?: string, errorMessage?: string) => {
@@ -157,258 +146,366 @@ export default function Swap() {
     }
   }
 
+  // Handle transaction success
+  useEffect(() => {
+    if (isSuccess && hash) {
+      console.log('✅ Transaction successful:', hash)
+      setCurrentStep('idle')
+      
+      if (currentStep === 'swapping') {
+        // Swap succeeded - record successful transaction
+        console.log('🎉 Swap completed successfully!')
+        recordTransaction(true, hash.transactionHash)
+      }
+    }
+  }, [isSuccess, hash, currentStep])
+
+  // Handle transaction error
+  useEffect(() => {
+    if (isTxError) {
+      console.error('❌ Transaction failed')
+      setCurrentStep('idle')
+      recordTransaction(false, undefined, 'Transaction failed')
+    }
+  }, [isTxError])
+
   const executeSwap = async () => {
-    if (!address || !amount) return
+    if (!address || !amount || !solverFee) return
 
     try {
-      const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
-      if (!contracts) {
-        throw new Error(`Unsupported chain: ${chainId}`)
-      }
+      setCurrentStep('approving')
+      
+      // First approve the router to spend RUSD
+      await writeContract({
+        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [
+          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
+          parseEther(amount)
+        ]
+      })
 
-      setTxStatus('Executing cross-chain swap...')
-      const amountWei = parseEther(amount)
-      const solverFeeWei = parseEther(solverFee)
-
-      console.log('📝 Submitting swap transaction...')
+      setCurrentStep('swapping')
+      
+      // Then execute the cross-chain swap
       writeContract({
-        address: contracts.ROUTER as `0x${string}`,
+        address: CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.ROUTER as `0x${string}`,
         abi: ROUTER_ABI,
         functionName: 'requestCrossChainSwap',
         args: [
-          contracts.RUSD as `0x${string}`, // tokenIn
-          contracts.RUSD as `0x${string}`, // tokenOut
-          amountWei,  // amount
-          solverFeeWei, // solverFee
-          destinationChainId, // destinationChainId
-          address as `0x${string}` // recipient (same user)
-        ],
-        chainId,
+          CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
+          CONTRACT_ADDRESSES[destinationChainId as keyof typeof CONTRACT_ADDRESSES]?.RUSD as `0x${string}`,
+          parseEther(amount),
+          parseEther(solverFee),
+          BigInt(destinationChainId),
+          address
+        ]
       })
-      
-      setTxStatus('Swap transaction submitted - waiting for confirmation...')
-
     } catch (error) {
-      console.error('Swap execution error:', error)
-      setTxStatus('Swap failed')
-      setCurrentStep('failed')
-      setIsConfirming(false)
-      
-      // Record failed transaction
+      console.error('❌ Swap execution failed:', error)
+      setCurrentStep('idle')
       const errorMessage = error instanceof Error ? error.message : 'Swap execution failed'
       recordTransaction(false, undefined, errorMessage)
     }
   }
 
   const handleCompleteSwap = async () => {
-    if (!address || !amount) {
-      alert('Please enter amount and ensure wallet is connected')
-      return
-    }
-
-    const contracts = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] || CONTRACT_ADDRESSES[84532]
-    if (!contracts) {
-      alert(`Unsupported chain: ${chainId}`)
-      return
-    }
-
-    console.log('✅ Starting swap process...')
-    setTxStatus('Starting swap process...')
-    setIsConfirming(true)
-    setCurrentStep('approving')
-    
     try {
-      const totalAmount = parseEther(amount)
-      const feeAmount = parseEther(solverFee)
-      const totalCost = totalAmount + feeAmount
-
-      // Step 1: Approve tokens
-      console.log('📝 Step 1: Submitting approval transaction...')
-      setTxStatus('Step 1: Approving RUSD tokens...')
-      
-      writeContract({
-        address: contracts.RUSD as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [contracts.ROUTER as `0x${string}`, totalCost],
-        chainId,
-      })
-      
-      setTxStatus('Approval transaction submitted - waiting for confirmation...')
-
+      await executeSwap()
     } catch (error) {
-      console.error('Complete swap error:', error)
-      setTxStatus('Swap failed')
-      setIsConfirming(false)
-      setCurrentStep('failed')
-      
-      // Record failed transaction
+      console.error('❌ Swap failed:', error)
       const errorMessage = error instanceof Error ? error.message : 'Swap failed'
       recordTransaction(false, undefined, errorMessage)
     }
   }
 
-  // Handle transaction success
-  useEffect(() => {
-    if (isTxSuccess && hash) {
-      console.log('✅ Transaction confirmed:', hash)
-      console.log('🔍 Transaction details:', { hash: hash.transactionHash, status: hash.status })
-      
-      if (currentStep === 'approving') {
-        // Approval succeeded, now execute swap
-        setCurrentStep('swapping')
-        setTxStatus('Approval successful! Now executing swap...')
-        executeSwap()
-      } else if (currentStep === 'swapping') {
-        // Swap succeeded - record successful transaction
-        setIsConfirming(false)
-        setIsConfirmed(true)
-        setCurrentStep('completed')
-        setTxStatus(`Swap completed successfully! Transaction: ${hash.transactionHash}`)
-        
-        // Record successful transaction
-        recordTransaction(true, hash.transactionHash)
-      }
+  const getChainName = (chainId: number) => {
+    switch (chainId) {
+      case 84532: return 'Base Sepolia'
+      case 43113: return 'Avalanche Fuji'
+      default: return `Chain ${chainId}`
     }
-  }, [isTxSuccess, hash, currentStep])
+  }
 
-  // Handle transaction error
-  useEffect(() => {
-    if (isTxError) {
-      console.log('❌ Transaction failed')
-      setIsConfirming(false)
-      setIsConfirmed(false)
-      setCurrentStep('failed')
-      setTxStatus('Transaction failed')
-      
-      // Record failed transaction
-      recordTransaction(false, undefined, 'Transaction failed')
+  const getChainColor = (chainId: number) => {
+    switch (chainId) {
+      case 84532: return 'bg-blue-500'
+      case 43113: return 'bg-red-500'
+      default: return 'bg-gray-500'
     }
-  }, [isTxError])
+  }
 
   if (!isConnected) {
     return (
-      <div className="connect-prompt">
-        <h2>Connect Your Wallet</h2>
-        <p>Connect your wallet to perform cross-chain swaps.</p>
+      <div className="page-container">
+        <div className="page-header">
+          <h1 className="page-title">Cross-Chain Swap</h1>
+          <p className="page-subtitle">Connect your wallet to start swapping RUSD across chains</p>
+        </div>
+        
+        <div className="card max-w-md mx-auto text-center">
+          <WalletIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <h2 className="text-xl font-bold mb-2">Wallet Not Connected</h2>
+          <p className="text-gray-600 mb-6">Please connect your wallet to access the swap functionality.</p>
+          <Button size="lg" className="w-full">
+            <WalletIcon className="w-5 h-5 mr-2" />
+            Connect Wallet
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="swap-page">
-      <div className="header">
-        <h1>Cross-Chain Swap</h1>
-        <p>Swap RUSD tokens to another chain (to your own wallet)</p>
+    <div className="page-container">
+      <div className="page-header">
+        <h1 className="page-title">Cross-Chain Swap</h1>
+        <p className="page-subtitle">Swap RUSD tokens between Base Sepolia and Avalanche Fuji testnets</p>
       </div>
 
-      <div className="content">
-        {/* Faucet Section */}
-        <div className="faucet-section">
-          <h3>Get Test Tokens</h3>
-          <FaucetButton chainId={chainId || 0} />
-        </div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Swap Form */}
-        <div className="swap-form">
-          <h3>Swap Details</h3>
-          
-          <div className="form-group">
-            <label>Amount (RUSD)</label>
-            <input
-              type="number"
-              placeholder="Enter amount to swap"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              step="0.01"
-              min="0"
-            />
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title flex items-center">
+              <ArrowsUpDownIcon className="w-6 h-6 mr-2" />
+              Swap Configuration
+            </h2>
+            <p className="card-subtitle">Configure your cross-chain swap parameters</p>
           </div>
 
-          <div className="form-group">
-            <label>Solver Fee (RUSD)</label>
-            <input
-              type="number"
-              placeholder="0.01"
-              value={solverFee}
-              onChange={(e) => setSolverFee(e.target.value)}
-              step="0.01"
-              min="0"
-            />
-          </div>
+          <div className="space-y-6">
+            {/* Amount Input */}
+            <div className="form-group">
+              <label className="form-label">Amount (RUSD)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.0"
+                  className="form-input pr-12"
+                  step="0.01"
+                  min="0"
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <span className="text-sm font-mono text-gray-500">RUSD</span>
+                </div>
+              </div>
+            </div>
 
-          <div className="form-group">
-            <label>From Chain (Current)</label>
-            <input
-              type="text"
-              value={getCurrentChainName(chainId || 0)}
-              disabled
-              className="disabled-field"
-            />
-          </div>
+            {/* Solver Fee */}
+            <div className="form-group">
+              <label className="form-label">Solver Fee (ETH)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={solverFee}
+                  onChange={(e) => setSolverFee(e.target.value)}
+                  placeholder="0.01"
+                  className="form-input pr-12"
+                  step="0.001"
+                  min="0"
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <span className="text-sm font-mono text-gray-500">ETH</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">Fee paid to solver for executing the cross-chain transfer</p>
+            </div>
 
-          <div className="form-group">
-            <label>To Chain (Destination)</label>
-            <select
-              value={destinationChainId}
-              onChange={(e) => setDestinationChainId(Number(e.target.value))}
-            >
-              <option value={43113}>Avalanche Fuji</option>
-              <option value={84532}>Base Sepolia</option>
-            </select>
-          </div>
+            {/* Destination Chain */}
+            <div className="form-group">
+              <label className="form-label">Destination Chain</label>
+              <select
+                value={destinationChainId}
+                onChange={(e) => setDestinationChainId(Number(e.target.value))}
+                className="form-select"
+              >
+                <option value={43113}>Avalanche Fuji</option>
+                <option value={84532}>Base Sepolia</option>
+              </select>
+            </div>
 
-          <div className="button-group">
-            <button 
-              className="complete-swap-button"
+            {/* Swap Button */}
+            <Button
               onClick={handleCompleteSwap}
-              disabled={isWritePending || isConfirming || !amount}
+              disabled={!amount || !solverFee || isPending || currentStep !== 'idle'}
+              size="lg"
+              className="w-full"
             >
-              {currentStep === 'approving' ? '⏳ Approving...' : 
-               currentStep === 'swapping' ? '🔄 Swapping...' : 
-               currentStep === 'completed' ? '✅ Swap Completed!' :
-               currentStep === 'failed' ? '❌ Swap Failed' :
-               isWritePending ? 'Processing...' : '💱 Complete Swap'}
-            </button>
-            <p className="swap-instructions">
-              This will open MetaMask with TWO popups sequentially:<br/>
-              1️⃣ First popup: Approve RUSD tokens (required for swap)<br/>
-              2️⃣ Second popup: Execute cross-chain swap (opens after approval)<br/>
-              <strong>Both must be approved for swap to complete!</strong>
-            </p>
+              {isPending ? (
+                <>
+                  <div className="spinner mr-2" />
+                  {currentStep === 'approving' ? 'Approving...' : 'Swapping...'}
+                </>
+              ) : (
+                <>
+                  <ArrowPathIcon className="w-5 h-5 mr-2" />
+                  Execute Swap
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
-        {/* Transaction Status */}
-        {txStatus && (
-          <div className="status-section">
-            <h3>Status</h3>
-            <p className={txStatus.includes('confirmed') ? 'success' : 'info'}>{txStatus}</p>
-            {hash && (
-              <p>
-                <a 
-                  href={`https://${chainId === 84532 ? 'sepolia.basescan.org' : 'testnet.snowtrace.io'}/tx/${hash.transactionHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View Transaction
-                </a>
-              </p>
-            )}
-            {isRecordingTransaction && (
-              <p className="info">📝 Recording transaction to database...</p>
-            )}
-            {transactionRecorded && (
-              <p className="success">✅ Transaction recorded successfully</p>
-            )}
+        {/* Swap Details & Status */}
+        <div className="space-y-6">
+          {/* Current Chain Info */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title flex items-center">
+                <CubeIcon className="w-5 h-5 mr-2" />
+                Current Network
+              </h3>
+            </div>
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center">
+                <div className={`w-3 h-3 rounded-full mr-3 ${getChainColor(chainId)}`}></div>
+                <span className="font-semibold">{getChainName(chainId)}</span>
+              </div>
+              <span className="text-sm font-mono text-gray-600">Chain ID: {chainId}</span>
+            </div>
           </div>
-        )}
 
-        {/* Network Info */}
-        <div className="network-info">
-          <h3>Current Network</h3>
-          <p>{getCurrentChainName(chainId || 0)}</p>
-          <p>Supported: Base Sepolia ↔ Avalanche Fuji</p>
+          {/* Swap Summary */}
+          {amount && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title flex items-center">
+                  <CurrencyDollarIcon className="w-5 h-5 mr-2" />
+                  Swap Summary
+                </h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-600">From</span>
+                  <span className="font-semibold">{getChainName(chainId)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-600">To</span>
+                  <span className="font-semibold">{getChainName(destinationChainId)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-600">Amount</span>
+                  <span className="font-semibold font-mono">{amount} RUSD</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600">Solver Fee</span>
+                  <span className="font-semibold font-mono">{solverFee} ETH</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Transaction Status */}
+          {(currentStep !== 'idle' || isSuccess || isTxError) && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title flex items-center">
+                  <ClockIcon className="w-5 h-5 mr-2" />
+                  Transaction Status
+                </h3>
+              </div>
+              <div className="space-y-4">
+                {currentStep === 'approving' && (
+                  <div className="flex items-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="spinner mr-3" />
+                    <div>
+                      <p className="font-semibold text-yellow-800">Approving RUSD</p>
+                      <p className="text-sm text-yellow-600">Please confirm the approval transaction in your wallet</p>
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 'swapping' && (
+                  <div className="flex items-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="spinner mr-3" />
+                    <div>
+                      <p className="font-semibold text-blue-800">Executing Swap</p>
+                      <p className="text-sm text-blue-600">Cross-chain swap in progress...</p>
+                    </div>
+                  </div>
+                )}
+
+                {isSuccess && (
+                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircleIcon className="w-6 h-6 mr-3 text-green-600" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-800">Swap Successful!</p>
+                      <p className="text-sm text-green-600">Your RUSD has been transferred to {getChainName(destinationChainId)}</p>
+                      {hash && (
+                        <a
+                          href={`https://${chainId === 84532 ? 'sepolia.basescan.org' : 'testnet.snowtrace.io'}/tx/${hash.transactionHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center mt-2 text-sm text-green-700 hover:text-green-800"
+                        >
+                          View Transaction
+                          <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {isTxError && (
+                  <div className="flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <XCircleIcon className="w-6 h-6 mr-3 text-red-600" />
+                    <div>
+                      <p className="font-semibold text-red-800">Swap Failed</p>
+                      <p className="text-sm text-red-600">Transaction was not successful</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recording Status */}
+                {isRecordingTransaction && (
+                  <div className="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="spinner mr-3" />
+                    <div>
+                      <p className="font-semibold text-gray-800">Recording Transaction</p>
+                      <p className="text-sm text-gray-600">Saving transaction details...</p>
+                    </div>
+                  </div>
+                )}
+
+                {transactionRecorded && (
+                  <div className="flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckBadgeIcon className="w-6 h-6 mr-3 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-800">Transaction Recorded</p>
+                      <p className="text-sm text-green-600">Transaction details saved successfully</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Faucet Section */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title flex items-center">
+                <BeakerIcon className="w-5 h-5 mr-2" />
+                Testnet Faucet
+              </h3>
+              <p className="card-subtitle">Get test RUSD tokens for testing</p>
+            </div>
+            <div className="space-y-4">
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <ExclamationTriangleIcon className="w-5 h-5 mr-2 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-yellow-800 font-semibold">Testnet Only</p>
+                    <p className="text-sm text-yellow-700">This faucet provides test RUSD tokens with no real value</p>
+                  </div>
+                </div>
+              </div>
+              <FaucetButton chainId={chainId} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

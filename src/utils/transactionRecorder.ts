@@ -33,6 +33,22 @@ export interface TransactionResponse {
   error?: string
 }
 
+export interface TransactionsResponse {
+  success: boolean
+  data?: {
+    transactions: any[]
+  }
+  error?: string
+}
+
+export interface PaymentLinksResponse {
+  success: boolean
+  data?: {
+    paymentLinks: any[]
+  }
+  error?: string
+}
+
 // Record Send Transaction
 export async function recordSendTransaction(transactionData: SendTransactionData): Promise<TransactionResponse> {
   try {
@@ -117,7 +133,7 @@ export async function getTransactionsByWallet(
     limit?: number
     offset?: number
   } = {}
-): Promise<TransactionResponse> {
+): Promise<TransactionsResponse> {
   try {
     const params = new URLSearchParams({
       ...(options.type && { type: options.type }),
@@ -157,7 +173,7 @@ export async function getPaymentLinksByCreator(
     limit?: number
     offset?: number
   } = {}
-): Promise<TransactionResponse> {
+): Promise<PaymentLinksResponse> {
   try {
     const params = new URLSearchParams({
       ...(options.status && { status: options.status }),
