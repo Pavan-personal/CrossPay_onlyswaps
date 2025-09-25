@@ -301,7 +301,7 @@ export default function LandingPage({ onConnectWallet, isWalletConnected, onStar
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-black">CrossPay</h1>
-                <p className="text-sm text-gray-600 font-mono">by Randamu</p>
+                <p className="text-sm text-gray-600 font-mono">by OnlySwap</p>
               </div>
             </div>
 
@@ -1320,7 +1320,7 @@ export default function LandingPage({ onConnectWallet, isWalletConnected, onStar
               </div>
               <div className="text-left">
                 <h3 className="text-2xl font-black">CrossPay</h3>
-                <p className="text-sm font-mono text-gray-400">by Randamu</p>
+                <p className="text-sm font-mono text-gray-400">by OnlySwap</p>
               </div>
             </div>
 
@@ -1339,7 +1339,7 @@ export default function LandingPage({ onConnectWallet, isWalletConnected, onStar
 
             <div className="border-t-2 border-white pt-8">
               <p className="text-sm font-mono text-gray-400">
-                © 2025 Randamu. All rights reserved. | Built with advanced solver technology.
+                © 2025 OnlySwap. All rights reserved. | Built with advanced solver technology.
               </p>
             </div>
           </div>
