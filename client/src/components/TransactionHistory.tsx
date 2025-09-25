@@ -220,7 +220,7 @@ export default function TransactionHistory() {
               onClick={() => setTypeFilter('send')}
               className={`filter-button ${typeFilter === 'send' ? 'active' : ''}`}
             >
-              Send
+              Sent
             </button>
             <button
               onClick={() => setTypeFilter('swap')}

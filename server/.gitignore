@@ -15,8 +15,8 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
-**/prisma/dev.db
-**/prisma/*.db
+prisma/dev.db
+prisma/*.db
 
 # Logs
 logs
@@ -113,13 +113,13 @@ dist/
 out/
 
 # Prisma
-**/prisma/migrations/
-**/prisma/*.db
-**/prisma/*.db-journal
+prisma/migrations/
+prisma/*.db
+prisma/*.db-journal
 
 # API keys and secrets
-**/config/secrets.js
-**/config/keys.js
+config/secrets.js
+config/keys.js
 *.key
 *.pem
 *.p12
@@ -133,20 +133,3 @@ out/
 # Test files
 test-results/
 coverage/
-
-# IDE files
-*.sublime-project
-*.sublime-workspace
-
-# MacOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Linux
-*~

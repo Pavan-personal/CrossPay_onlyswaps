@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PaymentLink {
+  id                 String           @id @default(uuid())
+  paymentId          String           @unique
+  creatorAddress     String
+  recipientAddress   String
+  amount             String
+  solverFee          String
+  sourceChainId      Int
+  destinationChainId Int
+  status             String           @default("pending")
+  createdAt          DateTime         @default(now())
+  expiresAt          DateTime
+  paidAt             DateTime?
+  transactionHash    String?
+  metadata           Json?
+  paymentAttempts    PaymentAttempt[]
+
+  @@index([paymentId])
+  @@index([recipientAddress])
+  @@index([creatorAddress])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payment_links")
+}
+
+model PaymentAttempt {
+  id               String      @id @default(uuid())
+  paymentId        String
+  attemptAddress   String
+  attemptChainId   Int
+  attemptTimestamp DateTime    @default(now())
+  success          Boolean     @default(false)
+  errorMessage     String?
+  transactionHash  String?
+  paymentLink      PaymentLink @relation(fields: [paymentId], references: [paymentId], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([attemptAddress])
+  @@map("payment_attempts")
+}
+
+model Transaction {
+  id               String      @id @default(uuid())
+  type             String      // 'send', 'swap', 'payment'
+  walletAddress    String      // User who initiated the transaction
+  fromChainId      Int
+  toChainId        Int?
+  amount           String?     // Amount being sent/swapped
+  recipientAddress String?     // For send transactions
+  tokenIn          String?     // For swap transactions
+  tokenOut         String?     // For swap transactions
+  success          Boolean     @default(false)
+  errorMessage     String?
+  transactionHash  String?
+  timestamp        DateTime    @default(now())
+  metadata         Json?       // Additional data for different transaction types
+
+  @@index([walletAddress])
+  @@index([type])
+  @@index([timestamp])
+  @@index([success])
+  @@map("transactions")
+}
