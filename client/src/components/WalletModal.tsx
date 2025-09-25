@@ -1,4 +1,4 @@
-import { useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi'
+import { useAccount, useBalance, useChainId, useSwitchChain, useDisconnect } from 'wagmi'
 import { Button } from '@/components/ui/button'
 import { useRusdBalance } from '@/hooks/useRusdBalance'
 import {
@@ -23,6 +23,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const { data: ethBalance } = useBalance({ address })
   const { balance: rusdBalance, isLoading: isLoadingRusd } = useRusdBalance(address, chainId)
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain()
+  const { disconnect } = useDisconnect()
 
   // Get chain name
   const getChainName = (chainId: number) => {
@@ -54,6 +55,12 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } catch (error) {
       console.error('Error adding RUSD token:', error)
     }
+  }
+
+  // Handle wallet disconnect
+  const handleDisconnect = () => {
+    disconnect()
+    onClose()
   }
 
   if (!isOpen) return null
@@ -176,10 +183,17 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-gray-200">
+        <div className="px-4 py-3 border-t border-gray-200 space-y-2">
+          <Button
+            onClick={handleDisconnect}
+            className="w-full bg-red-600 text-white hover:bg-red-700 text-sm"
+          >
+            Disconnect Wallet
+          </Button>
           <Button
             onClick={onClose}
-            className="w-full bg-black text-white hover:bg-gray-800 text-sm"
+            variant="outline"
+            className="w-full text-sm"
           >
             Close
           </Button>
