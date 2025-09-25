@@ -45,6 +45,14 @@ const validatePaymentSchema = Joi.object({
 });
 
 // Routes
+
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Payment Backend API is running'
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
