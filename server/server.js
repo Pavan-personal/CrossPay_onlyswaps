@@ -587,30 +587,28 @@ app.use('*', (req, res) => {
   });
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Payment Backend API running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`💳 Payment API: http://localhost:${PORT}/api/payment`);
-});
+// Start server (only if not in Vercel environment)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Payment Backend API running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`💳 Payment API: http://localhost:${PORT}/api/payment`);
+  });
+}
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
-  await prisma.$disconnect();
-  server.close(() => {
-    console.log('✅ Server closed');
+// Graceful shutdown (only for local development)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+  process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down gracefully...');
+    await prisma.$disconnect();
     process.exit(0);
   });
-});
 
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Shutting down gracefully...');
-  await prisma.$disconnect();
-  server.close(() => {
-    console.log('✅ Server closed');
+  process.on('SIGTERM', async () => {
+    console.log('\n🛑 Shutting down gracefully...');
+    await prisma.$disconnect();
     process.exit(0);
   });
-});
+}
 
 module.exports = app;
