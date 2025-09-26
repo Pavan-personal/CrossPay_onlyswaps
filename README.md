@@ -2,6 +2,8 @@
 
 A modern cross-chain payment platform built with React, TypeScript, and Node.js that enables seamless RUSD token transfers between Base Sepolia and Avalanche Fuji networks.
 
+<img width="1470" height="956" alt="Screenshot 2025-09-25 at 6 03 22 PM" src="https://github.com/user-attachments/assets/9f88fc41-9309-4890-a127-62170d60ed5a" />
+
 ## 🏗️ Project Structure
 
 ```
